@@ -19,7 +19,12 @@ package com.firefly.common.application.plugin.loader;
 import com.firefly.common.application.plugin.ProcessPlugin;
 import com.firefly.common.application.plugin.ProcessPluginRegistry;
 import com.firefly.common.application.plugin.config.PluginProperties;
+import com.firefly.common.application.plugin.config.PluginProperties.CircuitBreakerProperties;
 import com.firefly.common.application.plugin.config.PluginProperties.RepositoryConfig;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
+import io.github.resilience4j.reactor.circuitbreaker.operator.CircuitBreakerOperator;
 import lombok.Builder;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
@@ -34,8 +39,10 @@ import java.io.*;
 import java.net.URL;
 import java.nio.file.*;
 import java.security.MessageDigest;
+import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeoutException;
 
 /**
  * Plugin loader that downloads and loads plugins from remote repositories.
@@ -80,6 +87,8 @@ public class RemoteRepositoryPluginLoader implements PluginLoader {
     private final ProcessPluginRegistry registry;
     private final JarPluginLoader jarPluginLoader;
     private final WebClient webClient;
+    private final CircuitBreaker downloadCircuitBreaker;
+    private final Duration downloadTimeout;
     
     /**
      * Cache of downloaded artifacts.
@@ -98,9 +107,46 @@ public class RemoteRepositoryPluginLoader implements PluginLoader {
         this.properties = properties;
         this.registry = registry;
         this.jarPluginLoader = jarPluginLoader;
+        this.downloadTimeout = properties.getRemoteTimeout();
         this.webClient = WebClient.builder()
                 .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(50 * 1024 * 1024)) // 50MB
                 .build();
+        
+        // Configure circuit breaker for remote downloads
+        this.downloadCircuitBreaker = createCircuitBreaker(properties.getCircuitBreaker());
+    }
+    
+    /**
+     * Creates a circuit breaker with the configured properties.
+     */
+    private CircuitBreaker createCircuitBreaker(CircuitBreakerProperties cbProps) {
+        CircuitBreakerConfig config = CircuitBreakerConfig.custom()
+                .failureRateThreshold(cbProps.getFailureRateThreshold())
+                .slowCallRateThreshold(cbProps.getSlowCallRateThreshold())
+                .slowCallDurationThreshold(cbProps.getSlowCallDurationThreshold())
+                .waitDurationInOpenState(cbProps.getWaitDurationInOpenState())
+                .permittedNumberOfCallsInHalfOpenState(cbProps.getPermittedCallsInHalfOpenState())
+                .slidingWindowType(CircuitBreakerConfig.SlidingWindowType.COUNT_BASED)
+                .slidingWindowSize(cbProps.getSlidingWindowSize())
+                .minimumNumberOfCalls(cbProps.getMinimumNumberOfCalls())
+                .recordExceptions(IOException.class, TimeoutException.class)
+                .build();
+        
+        CircuitBreakerRegistry registry = CircuitBreakerRegistry.of(config);
+        CircuitBreaker cb = registry.circuitBreaker("remote-plugin-download");
+        
+        // Add event listeners for monitoring
+        cb.getEventPublisher()
+                .onStateTransition(event -> 
+                        log.info("Circuit breaker '{}' state changed: {} -> {}",
+                                event.getCircuitBreakerName(),
+                                event.getStateTransition().getFromState(),
+                                event.getStateTransition().getToState()))
+                .onCallNotPermitted(event -> 
+                        log.warn("Circuit breaker '{}' rejected call - circuit is OPEN",
+                                event.getCircuitBreakerName()));
+        
+        return cb;
     }
     
     @Override
@@ -172,12 +218,20 @@ public class RemoteRepositoryPluginLoader implements PluginLoader {
         }
         
         return resolveAndDownload(descriptor)
+                .transformDeferred(CircuitBreakerOperator.of(downloadCircuitBreaker))
+                .timeout(downloadTimeout)
                 .flatMap(artifact -> loadFromArtifact(artifact, descriptor))
                 .doOnSuccess(plugin -> {
                     if (plugin != null) {
                         processToArtifact.put(plugin.getProcessId(), 
                                 artifactCache.get(getCacheKey(descriptor)));
                     }
+                })
+                .onErrorResume(io.github.resilience4j.circuitbreaker.CallNotPermittedException.class, e -> {
+                    log.error("Remote plugin download circuit breaker is OPEN for: {}", descriptor.getProcessId());
+                    return Mono.error(new IllegalStateException(
+                            "Remote plugin download temporarily unavailable (circuit breaker open): " + 
+                            descriptor.getProcessId(), e));
                 });
     }
     

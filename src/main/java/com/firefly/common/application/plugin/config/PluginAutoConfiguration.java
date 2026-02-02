@@ -18,25 +18,30 @@ package com.firefly.common.application.plugin.config;
 
 import com.firefly.common.application.plugin.ProcessPlugin;
 import com.firefly.common.application.plugin.ProcessPluginRegistry;
+import com.firefly.common.application.plugin.event.PluginEventPublisher;
 import com.firefly.common.application.plugin.loader.PluginLoader;
 import com.firefly.common.application.plugin.loader.SpringBeanPluginLoader;
+import com.firefly.common.application.plugin.metrics.PluginMetricsService;
 import com.firefly.common.application.plugin.service.ProcessMappingService;
 import com.firefly.common.application.plugin.service.ProcessPluginExecutor;
 import com.firefly.common.application.security.SecurityAuthorizationService;
-import jakarta.annotation.PostConstruct;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.SmartLifecycle;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.time.Duration;
 import java.util.Comparator;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Auto-configuration for the Firefly Plugin Architecture.
@@ -62,12 +67,34 @@ import java.util.List;
 @EnableConfigurationProperties(PluginProperties.class)
 @ConditionalOnProperty(name = "firefly.application.plugin.enabled", havingValue = "true", matchIfMissing = true)
 @ComponentScan(basePackages = "com.firefly.common.application.plugin")
-@RequiredArgsConstructor
-public class PluginAutoConfiguration {
+public class PluginAutoConfiguration implements SmartLifecycle {
     
-    private final PluginProperties properties;
-    private final List<PluginLoader> pluginLoaders;
-    private final ProcessPluginRegistry registry;
+    /**
+     * Phase for plugin system - runs early in startup (before web server).
+     */
+    private static final int PLUGIN_SYSTEM_PHASE = SmartLifecycle.DEFAULT_PHASE - 1000;
+    
+    /**
+     * Default timeout for plugin initialization.
+     */
+    private static final Duration DEFAULT_INIT_TIMEOUT = Duration.ofMinutes(2);
+    
+    private final AtomicBoolean running = new AtomicBoolean(false);
+    
+    @Autowired
+    private PluginProperties properties;
+    
+    @Autowired
+    private List<PluginLoader> pluginLoaders;
+    
+    @Autowired
+    private ProcessPluginRegistry registry;
+    
+    @Autowired(required = false)
+    private PluginEventPublisher eventPublisher;
+    
+    @Autowired(required = false)
+    private PluginMetricsService metricsService;
     
     /**
      * Creates the ProcessPluginRegistry bean if not already defined.
@@ -96,8 +123,11 @@ public class PluginAutoConfiguration {
             ProcessPluginRegistry registry,
             ProcessMappingService mappingService,
             SecurityAuthorizationService authorizationService,
-            PluginProperties properties) {
-        return new ProcessPluginExecutor(registry, mappingService, authorizationService, properties);
+            PluginProperties properties,
+            @Autowired(required = false) PluginEventPublisher eventPublisher,
+            @Autowired(required = false) PluginMetricsService metricsService) {
+        return new ProcessPluginExecutor(registry, mappingService, authorizationService, 
+                properties, eventPublisher, metricsService);
     }
     
     /**
@@ -111,55 +141,130 @@ public class PluginAutoConfiguration {
         return new DefaultProcessMappingService();
     }
     
-    /**
-     * Initializes the plugin system after the application context is ready.
-     */
-    @PostConstruct
-    public void initializePluginSystem() {
+    // ==================== SmartLifecycle Implementation ====================
+    
+    @Override
+    public void start() {
         if (!properties.isEnabled()) {
             log.info("Plugin system is disabled");
+            running.set(true);
             return;
         }
         
-        log.info("Initializing Firefly Plugin System...");
+        log.info("Starting Firefly Plugin System...");
+        long startTime = System.currentTimeMillis();
         
-        // Sort loaders by priority
-        List<PluginLoader> sortedLoaders = pluginLoaders.stream()
-                .filter(PluginLoader::isEnabled)
-                .sorted(Comparator.comparingInt(PluginLoader::getPriority))
-                .toList();
+        try {
+            // Sort loaders by priority
+            List<PluginLoader> sortedLoaders = pluginLoaders.stream()
+                    .filter(PluginLoader::isEnabled)
+                    .sorted(Comparator.comparingInt(PluginLoader::getPriority))
+                    .toList();
+            
+            log.info("Found {} enabled plugin loaders", sortedLoaders.size());
+            
+            AtomicInteger pluginCount = new AtomicInteger(0);
+            
+            // Initialize loaders and discover plugins - BLOCKING to ensure completion
+            Flux.fromIterable(sortedLoaders)
+                    .concatMap(loader -> {
+                        log.debug("Initializing loader: {} (priority: {})", 
+                                loader.getLoaderType(), loader.getPriority());
+                        return loader.initialize()
+                                .then(Mono.just(loader));
+                    })
+                    .concatMap(loader -> {
+                        log.debug("Discovering plugins from loader: {}", loader.getLoaderType());
+                        return loader.discoverPlugins()
+                                .doOnNext(p -> log.debug("Discovered plugin: {} v{} from {}",
+                                        p.getProcessId(), p.getVersion(), loader.getLoaderType()));
+                    })
+                    .concatMap(plugin -> {
+                        log.debug("Initializing and registering plugin: {} v{}", 
+                                plugin.getProcessId(), plugin.getVersion());
+                        return plugin.onInit()
+                                .then(registry.register(plugin))
+                                .doOnSuccess(v -> {
+                                    pluginCount.incrementAndGet();
+                                    if (eventPublisher != null) {
+                                        String loaderType = plugin.getMetadata() != null 
+                                                ? plugin.getMetadata().getSourceType() 
+                                                : "unknown";
+                                        eventPublisher.publishPluginRegistered(plugin, loaderType);
+                                    }
+                                })
+                                .thenReturn(plugin);
+                    })
+                    .collectList()
+                    .timeout(DEFAULT_INIT_TIMEOUT)
+                    .block();  // BLOCKING - ensures all plugins are loaded before app starts
+            
+            long initTime = System.currentTimeMillis() - startTime;
+            log.info("Plugin system started. Registered {} processes ({} total versions) in {}ms",
+                    registry.size(), registry.totalVersionCount(), initTime);
+            
+            // Record metrics
+            if (metricsService != null) {
+                metricsService.recordInitialization(initTime, pluginCount.get());
+                metricsService.setRegisteredPluginCount(registry.size());
+            }
+            
+            // Publish system initialized event
+            if (eventPublisher != null) {
+                eventPublisher.publishSystemInitialized(registry.size(), registry.totalVersionCount(), initTime);
+            }
+            
+            // Validate plugin count if required
+            if (registry.size() == 0 && properties.getRegistry().isFailOnEmpty()) {
+                throw new IllegalStateException("No process plugins found and failOnEmpty is true");
+            }
+            
+            running.set(true);
+            
+        } catch (Exception e) {
+            log.error("Failed to start plugin system", e);
+            throw new IllegalStateException("Plugin system initialization failed", e);
+        }
+    }
+    
+    @Override
+    public void stop() {
+        if (!running.get()) {
+            return;
+        }
         
-        log.info("Found {} enabled plugin loaders", sortedLoaders.size());
+        log.info("Stopping Firefly Plugin System...");
         
-        // Initialize loaders and discover plugins
-        Flux.fromIterable(sortedLoaders)
-                .flatMap(loader -> {
-                    log.debug("Initializing loader: {} (priority: {})", 
-                            loader.getLoaderType(), loader.getPriority());
-                    return loader.initialize()
-                            .then(Mono.just(loader));
-                })
-                .flatMap(loader -> {
-                    log.debug("Discovering plugins from loader: {}", loader.getLoaderType());
-                    return loader.discoverPlugins();
-                })
-                .flatMap(plugin -> {
-                    log.debug("Registering plugin: {} v{}", 
-                            plugin.getProcessId(), plugin.getVersion());
-                    return plugin.onInit()
-                            .then(registry.register(plugin))
-                            .thenReturn(plugin);
-                })
-                .doOnComplete(() -> {
-                    log.info("Plugin system initialized. Registered {} processes ({} total versions)",
-                            registry.size(), registry.totalVersionCount());
-                    
-                    if (registry.size() == 0 && properties.getRegistry().isFailOnEmpty()) {
-                        throw new IllegalStateException("No process plugins found and failOnEmpty is true");
-                    }
-                })
-                .doOnError(error -> log.error("Failed to initialize plugin system", error))
-                .subscribe();
+        try {
+            // Shutdown all loaders
+            Flux.fromIterable(pluginLoaders)
+                    .filter(PluginLoader::isEnabled)
+                    .flatMap(PluginLoader::shutdown)
+                    .then()
+                    .timeout(Duration.ofSeconds(30))
+                    .block();
+            
+            log.info("Plugin system stopped");
+        } catch (Exception e) {
+            log.warn("Error during plugin system shutdown", e);
+        } finally {
+            running.set(false);
+        }
+    }
+    
+    @Override
+    public boolean isRunning() {
+        return running.get();
+    }
+    
+    @Override
+    public int getPhase() {
+        return PLUGIN_SYSTEM_PHASE;
+    }
+    
+    @Override
+    public boolean isAutoStartup() {
+        return true;
     }
     
     /**

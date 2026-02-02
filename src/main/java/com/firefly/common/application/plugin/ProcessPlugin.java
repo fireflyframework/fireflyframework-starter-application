@@ -173,4 +173,31 @@ public interface ProcessPlugin {
     default Mono<Void> onDestroy() {
         return Mono.empty();
     }
+    
+    /**
+     * Performs a health check on this plugin.
+     * 
+     * <p>Override this method to implement custom health checks that verify
+     * the plugin's dependencies and operational status.</p>
+     * 
+     * <p>Default implementation returns UP status. Plugins that depend on
+     * external services (databases, APIs, etc.) should override this to
+     * verify connectivity.</p>
+     * 
+     * <h3>Implementation Example</h3>
+     * <pre>
+     * &#64;Override
+     * public Mono&lt;HealthStatus&gt; healthCheck() {
+     *     return externalService.ping()
+     *         .map(r -> HealthStatus.up())
+     *         .onErrorReturn(HealthStatus.down("External service unavailable"));
+     * }
+     * </pre>
+     * 
+     * @return a Mono emitting the health status
+     * @since 1.0.0
+     */
+    default Mono<HealthStatus> healthCheck() {
+        return Mono.just(HealthStatus.up());
+    }
 }

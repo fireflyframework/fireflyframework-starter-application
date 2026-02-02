@@ -323,7 +323,8 @@ class AbstractProcessPluginTest {
                     .assertNext(result -> {
                         assertFalse(result.isSuccess());
                         assertEquals(ProcessResult.Status.TECHNICAL_ERROR, result.getStatus());
-                        assertEquals("PROCESS_ERROR", result.getErrorCode());
+                        // Error code is now the execution phase for better debugging
+                        assertEquals("EXECUTION", result.getErrorCode());
                         assertTrue(result.getErrorMessage().contains("Unexpected error"));
                     })
                     .verifyComplete();

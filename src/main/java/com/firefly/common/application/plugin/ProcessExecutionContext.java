@@ -18,6 +18,7 @@ package com.firefly.common.application.plugin;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.firefly.common.application.context.ApplicationExecutionContext;
+import com.firefly.common.application.plugin.config.PluginObjectMapperConfig;
 import lombok.Builder;
 import lombok.Singular;
 import lombok.Value;
@@ -55,10 +56,14 @@ import java.util.UUID;
 public class ProcessExecutionContext {
     
     /**
-     * Shared ObjectMapper for input conversion.
-     * Thread-safe singleton.
+     * Gets the configured ObjectMapper for input conversion.
+     * Uses the centralized PluginObjectMapperConfig for proper configuration.
+     * 
+     * @return the configured ObjectMapper
      */
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private static ObjectMapper getObjectMapper() {
+        return PluginObjectMapperConfig.getInstance();
+    }
     
     /**
      * The underlying application execution context.
@@ -174,7 +179,7 @@ public class ProcessExecutionContext {
             return null;
         }
         try {
-            return OBJECT_MAPPER.convertValue(inputs, type);
+            return getObjectMapper().convertValue(inputs, type);
         } catch (Exception e) {
             throw new IllegalArgumentException("Failed to convert input to " + type.getName(), e);
         }
@@ -200,7 +205,7 @@ public class ProcessExecutionContext {
         if (type.isInstance(value)) {
             return (T) value;
         }
-        return OBJECT_MAPPER.convertValue(value, type);
+        return getObjectMapper().convertValue(value, type);
     }
     
     /**

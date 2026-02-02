@@ -136,6 +136,30 @@ public class ProcessPluginRegistry {
                 ProcessPlugin removed = versions.remove(version);
                 if (removed != null) {
                     log.info("Unregistered process plugin: {} v{}", processId, version);
+                    
+                    // Clean up capability index for this version
+                    ProcessMetadata metadata = removed.getMetadata();
+                    if (metadata != null && metadata.getCapabilities() != null) {
+                        for (String capability : metadata.getCapabilities()) {
+                            // Only remove from capability index if no other version has this capability
+                            boolean otherVersionHasCapability = versions.values().stream()
+                                    .anyMatch(p -> {
+                                        ProcessMetadata pm = p.getMetadata();
+                                        return pm != null && pm.hasCapability(capability);
+                                    });
+                            if (!otherVersionHasCapability) {
+                                Collection<String> processIds = capabilityIndex.get(capability);
+                                if (processIds != null) {
+                                    processIds.remove(processId);
+                                    // Clean up empty capability entries
+                                    if (processIds.isEmpty()) {
+                                        capabilityIndex.remove(capability);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
                     // Clean up empty maps
                     if (versions.isEmpty()) {
                         plugins.remove(processId);

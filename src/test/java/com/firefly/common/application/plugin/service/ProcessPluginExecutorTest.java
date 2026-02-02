@@ -21,7 +21,9 @@ import com.firefly.common.application.context.AppContext;
 import com.firefly.common.application.context.ApplicationExecutionContext;
 import com.firefly.common.application.plugin.*;
 import com.firefly.common.application.plugin.config.PluginProperties;
+import com.firefly.common.application.plugin.event.PluginEventPublisher;
 import com.firefly.common.application.plugin.exception.ProcessNotFoundException;
+import com.firefly.common.application.plugin.metrics.PluginMetricsService;
 import com.firefly.common.application.security.SecurityAuthorizationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -30,6 +32,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
@@ -44,6 +48,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 @DisplayName("ProcessPluginExecutor Tests")
 class ProcessPluginExecutorTest {
     
@@ -62,6 +67,12 @@ class ProcessPluginExecutorTest {
     @Mock
     private PluginProperties.SecurityProperties securityConfig;
     
+    @Mock
+    private PluginEventPublisher eventPublisher;
+    
+    @Mock
+    private PluginMetricsService metricsService;
+    
     private ProcessPluginExecutor executor;
     
     private ApplicationExecutionContext testContext;
@@ -70,7 +81,8 @@ class ProcessPluginExecutorTest {
     
     @BeforeEach
     void setUp() {
-        executor = new ProcessPluginExecutor(registry, mappingService, authorizationService, properties);
+        executor = new ProcessPluginExecutor(registry, mappingService, authorizationService, properties, 
+                eventPublisher, metricsService);
         
         testTenantId = UUID.randomUUID();
         testProductId = UUID.randomUUID();
@@ -82,6 +94,9 @@ class ProcessPluginExecutorTest {
                         .partyId(UUID.randomUUID())
                         .permissions(Set.of("accounts:create", "accounts:read"))
                         .roles(Set.of("USER", "ADMIN"))
+                        .build())
+                .config(AppConfig.builder()
+                        .tenantId(testTenantId)
                         .build())
                 .build();
         

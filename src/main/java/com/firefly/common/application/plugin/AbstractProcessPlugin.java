@@ -17,6 +17,7 @@
 package com.firefly.common.application.plugin;
 
 import com.firefly.common.application.plugin.annotation.FireflyProcess;
+import com.firefly.common.application.plugin.exception.PluginExecutionException;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Mono;
 
@@ -198,26 +199,48 @@ public abstract class AbstractProcessPlugin<I, O> implements ProcessPlugin {
         
         try {
             // Convert input to typed object
-            I input = context.getInput(inputType);
+            I input;
+            try {
+                input = context.getInput(inputType);
+            } catch (Exception e) {
+                return handleError(PluginExecutionException.inputConversionFailed(
+                        getProcessId(), inputType, e));
+            }
             
             // Execute with typed input
             return doExecute(context, input)
                     .map(ProcessResult::success)
                     .doOnSuccess(result -> log.debug("Process {} completed successfully", getProcessId()))
-                    .onErrorResume(this::handleError);
+                    .onErrorResume(error -> handleError(
+                            PluginExecutionException.executionFailed(getProcessId(), getVersion(), error)));
             
         } catch (Exception e) {
-            return handleError(e);
+            return handleError(new PluginExecutionException(
+                    getProcessId(), getVersion(), PluginExecutionException.Phase.EXECUTION,
+                    "Unexpected error during execution", e));
         }
     }
     
     @Override
     public final Mono<ValidationResult> validate(ProcessExecutionContext context) {
         try {
-            I input = context.getInput(inputType);
-            return Mono.fromSupplier(() -> doValidate(context, input));
+            I input;
+            try {
+                input = context.getInput(inputType);
+            } catch (Exception e) {
+                log.warn("Input conversion error during validation in process {}: {}", 
+                        getProcessId(), e.getMessage());
+                return Mono.just(ValidationResult.errorWithCode(
+                        "INPUT_CONVERSION_ERROR", 
+                        "Failed to convert input: " + e.getMessage()));
+            }
+            return Mono.fromSupplier(() -> doValidate(context, input))
+                    .onErrorResume(e -> {
+                        log.warn("Validation error in process {}: {}", getProcessId(), e.getMessage());
+                        return Mono.just(ValidationResult.errorWithCode("VALIDATION_ERROR", e.getMessage()));
+                    });
         } catch (Exception e) {
-            log.warn("Validation error in process {}: {}", getProcessId(), e.getMessage());
+            log.warn("Unexpected validation error in process {}: {}", getProcessId(), e.getMessage());
             return Mono.just(ValidationResult.errorWithCode("VALIDATION_ERROR", e.getMessage()));
         }
     }
@@ -227,14 +250,24 @@ public abstract class AbstractProcessPlugin<I, O> implements ProcessPlugin {
         log.info("Compensating process: {}", getProcessId());
         
         try {
-            I input = context.getInput(inputType);
+            I input;
+            try {
+                input = context.getInput(inputType);
+            } catch (Exception e) {
+                return handleError(PluginExecutionException.inputConversionFailed(
+                        getProcessId(), inputType, e));
+            }
+            
             return doCompensate(context, input)
                     .map(result -> ProcessResult.success(Map.of("compensated", true, "result", result)))
                     .switchIfEmpty(Mono.just(ProcessResult.success(Map.of("compensated", true))))
                     .doOnSuccess(r -> log.info("Process {} compensated successfully", getProcessId()))
-                    .onErrorResume(this::handleError);
+                    .onErrorResume(error -> handleError(
+                            PluginExecutionException.compensationFailed(getProcessId(), error)));
         } catch (Exception e) {
-            return handleError(e);
+            return handleError(new PluginExecutionException(
+                    getProcessId(), getVersion(), PluginExecutionException.Phase.COMPENSATION,
+                    "Unexpected error during compensation", e));
         }
     }
     
@@ -287,14 +320,48 @@ public abstract class AbstractProcessPlugin<I, O> implements ProcessPlugin {
      * @return a ProcessResult representing the error
      */
     protected Mono<ProcessResult> handleError(Throwable error) {
-        log.error("Error in process {}: {}", getProcessId(), error.getMessage(), error);
+        // Unwrap the root cause for proper error classification
+        Throwable rootCause = getRootCause(error);
         
-        if (error instanceof BusinessException) {
-            BusinessException be = (BusinessException) error;
+        // Check for BusinessException first (either direct or as root cause)
+        if (error instanceof BusinessException be) {
+            log.warn("Business error in process {}: {} - {}", 
+                    getProcessId(), be.getErrorCode(), be.getMessage());
             return Mono.just(ProcessResult.businessError(be.getErrorCode(), be.getMessage()));
         }
         
+        if (rootCause instanceof BusinessException be) {
+            log.warn("Business error in process {}: {} - {}", 
+                    getProcessId(), be.getErrorCode(), be.getMessage());
+            return Mono.just(ProcessResult.businessError(be.getErrorCode(), be.getMessage()));
+        }
+        
+        // Handle PluginExecutionException with proper phase information
+        if (error instanceof PluginExecutionException pee) {
+            log.error("Plugin execution error in process {} [phase={}]: {}", 
+                    getProcessId(), pee.getPhase(), error.getMessage(), error);
+            return Mono.just(ProcessResult.builder()
+                    .status(ProcessResult.Status.TECHNICAL_ERROR)
+                    .errorCode(pee.getPhase().name())
+                    .errorMessage(rootCause.getMessage())
+                    .exception(error)
+                    .metadata("phase", pee.getPhase().name())
+                    .build());
+        }
+        
+        log.error("Error in process {}: {}", getProcessId(), error.getMessage(), error);
         return Mono.just(ProcessResult.technicalError(error, "PROCESS_ERROR"));
+    }
+    
+    /**
+     * Gets the root cause of an exception.
+     */
+    private Throwable getRootCause(Throwable error) {
+        Throwable cause = error;
+        while (cause.getCause() != null && cause.getCause() != cause) {
+            cause = cause.getCause();
+        }
+        return cause;
     }
     
     /**

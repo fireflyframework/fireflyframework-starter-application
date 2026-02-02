@@ -16,6 +16,7 @@
 
 package com.firefly.common.application.plugin.loader;
 
+import com.firefly.common.application.plugin.DelegatingProcessPlugin;
 import com.firefly.common.application.plugin.ProcessMetadata;
 import com.firefly.common.application.plugin.ProcessPlugin;
 import com.firefly.common.application.plugin.annotation.FireflyProcess;
@@ -147,7 +148,8 @@ public class SpringBeanPluginLoader implements PluginLoader, ApplicationContextA
                 try {
                     Class<?> clazz = Class.forName(className);
                     Object bean = applicationContext.getBean(clazz);
-                    return processBean(clazz.getSimpleName(), bean).block();
+                    // Process synchronously in this context
+                    return processBeanSync(clazz.getSimpleName(), bean);
                 } catch (ClassNotFoundException e) {
                     throw new IllegalArgumentException("Plugin class not found: " + className, e);
                 }
@@ -161,7 +163,8 @@ public class SpringBeanPluginLoader implements PluginLoader, ApplicationContextA
                 Object bean = entry.getValue();
                 FireflyProcess annotation = bean.getClass().getAnnotation(FireflyProcess.class);
                 if (annotation != null && processId.equals(annotation.id())) {
-                    return processBean(entry.getKey(), bean).block();
+                    // Process synchronously in this context
+                    return processBeanSync(entry.getKey(), bean);
                 }
             }
             
@@ -183,32 +186,38 @@ public class SpringBeanPluginLoader implements PluginLoader, ApplicationContextA
      * Processes a Spring bean to extract or wrap it as a ProcessPlugin.
      */
     private Mono<ProcessPlugin> processBean(String beanName, Object bean) {
-        return Mono.fromCallable(() -> {
-            if (!(bean instanceof ProcessPlugin)) {
-                log.warn("Bean {} is annotated with @FireflyProcess but does not implement ProcessPlugin, skipping",
-                        beanName);
-                return null;
-            }
-            
-            ProcessPlugin plugin = (ProcessPlugin) bean;
-            FireflyProcess annotation = bean.getClass().getAnnotation(FireflyProcess.class);
-            
-            if (annotation == null) {
-                log.warn("Bean {} implements ProcessPlugin but is not annotated with @FireflyProcess", beanName);
-                return null;
-            }
-            
-            // Build metadata from annotation if the plugin doesn't provide its own
-            ProcessMetadata existingMetadata = plugin.getMetadata();
-            if (existingMetadata == null || existingMetadata.getProcessId() == null) {
-                plugin = wrapWithMetadata(plugin, annotation);
-            }
-            
-            loadedPlugins.put(plugin.getProcessId(), plugin);
-            log.debug("Loaded Spring bean plugin: {} v{}", plugin.getProcessId(), plugin.getVersion());
-            
-            return plugin;
-        }).filter(p -> p != null);
+        return Mono.fromCallable(() -> processBeanSync(beanName, bean))
+                .filter(p -> p != null);
+    }
+    
+    /**
+     * Synchronous version of processBean for use in non-reactive contexts.
+     */
+    private ProcessPlugin processBeanSync(String beanName, Object bean) {
+        if (!(bean instanceof ProcessPlugin)) {
+            log.warn("Bean {} is annotated with @FireflyProcess but does not implement ProcessPlugin, skipping",
+                    beanName);
+            return null;
+        }
+        
+        ProcessPlugin plugin = (ProcessPlugin) bean;
+        FireflyProcess annotation = bean.getClass().getAnnotation(FireflyProcess.class);
+        
+        if (annotation == null) {
+            log.warn("Bean {} implements ProcessPlugin but is not annotated with @FireflyProcess", beanName);
+            return null;
+        }
+        
+        // Build metadata from annotation if the plugin doesn't provide its own
+        ProcessMetadata existingMetadata = plugin.getMetadata();
+        if (existingMetadata == null || existingMetadata.getProcessId() == null) {
+            plugin = wrapWithMetadata(plugin, annotation);
+        }
+        
+        loadedPlugins.put(plugin.getProcessId(), plugin);
+        log.debug("Loaded Spring bean plugin: {} v{}", plugin.getProcessId(), plugin.getVersion());
+        
+        return plugin;
     }
     
     /**
@@ -216,7 +225,7 @@ public class SpringBeanPluginLoader implements PluginLoader, ApplicationContextA
      */
     private ProcessPlugin wrapWithMetadata(ProcessPlugin plugin, FireflyProcess annotation) {
         ProcessMetadata metadata = buildMetadataFromAnnotation(annotation);
-        return new AnnotatedProcessPlugin(plugin, metadata);
+        return DelegatingProcessPlugin.wrap(plugin, metadata);
     }
     
     /**
@@ -259,58 +268,5 @@ public class SpringBeanPluginLoader implements PluginLoader, ApplicationContextA
         }
         
         return builder.build();
-    }
-    
-    /**
-     * Wrapper that provides annotation-derived metadata for a ProcessPlugin.
-     */
-    @RequiredArgsConstructor
-    private static class AnnotatedProcessPlugin implements ProcessPlugin {
-        
-        private final ProcessPlugin delegate;
-        private final ProcessMetadata metadata;
-        
-        @Override
-        public String getProcessId() {
-            return metadata.getProcessId();
-        }
-        
-        @Override
-        public String getVersion() {
-            return metadata.getVersion();
-        }
-        
-        @Override
-        public ProcessMetadata getMetadata() {
-            return metadata;
-        }
-        
-        @Override
-        public Mono<com.firefly.common.application.plugin.ProcessResult> execute(
-                com.firefly.common.application.plugin.ProcessExecutionContext context) {
-            return delegate.execute(context);
-        }
-        
-        @Override
-        public Mono<com.firefly.common.application.plugin.ValidationResult> validate(
-                com.firefly.common.application.plugin.ProcessExecutionContext context) {
-            return delegate.validate(context);
-        }
-        
-        @Override
-        public Mono<com.firefly.common.application.plugin.ProcessResult> compensate(
-                com.firefly.common.application.plugin.ProcessExecutionContext context) {
-            return delegate.compensate(context);
-        }
-        
-        @Override
-        public Mono<Void> onInit() {
-            return delegate.onInit();
-        }
-        
-        @Override
-        public Mono<Void> onDestroy() {
-            return delegate.onDestroy();
-        }
     }
 }

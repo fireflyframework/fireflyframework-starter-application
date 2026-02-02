@@ -26,6 +26,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import reactor.test.StepVerifier;
 
 import java.io.File;
@@ -42,6 +44,7 @@ import static org.mockito.Mockito.*;
 
 @DisplayName("JarPluginLoader Tests")
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class JarPluginLoaderTest {
     
     @Mock

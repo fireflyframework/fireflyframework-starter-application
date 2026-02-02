@@ -21,15 +21,21 @@ import com.firefly.common.application.plugin.config.PluginProperties;
 import com.firefly.common.application.plugin.service.ProcessMappingService;
 import com.github.benmanes.caffeine.cache.AsyncCache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import io.netty.channel.ChannelOption;
+import io.netty.handler.timeout.ReadTimeoutHandler;
+import io.netty.handler.timeout.WriteTimeoutHandler;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
+import reactor.netty.http.client.HttpClient;
 
 import java.time.Duration;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 
 /**
  * ProcessMappingService implementation with caching.
@@ -72,17 +78,22 @@ public class CachingProcessMappingService implements ProcessMappingService {
     private final WebClient configMgmtClient;
     private final PluginProperties properties;
     private final AsyncCache<MappingCacheKey, ProcessMapping> cache;
+    private final Duration responseTimeout;
     
     /**
      * Base URL path for config-mgmt API process mappings.
      */
     private static final String MAPPINGS_API_PATH = "/api/v1/api-process-mappings";
     
+    /**
+     * Constructor that accepts a pre-configured WebClient.
+     */
     public CachingProcessMappingService(
             WebClient configMgmtClient,
             PluginProperties properties) {
         this.configMgmtClient = configMgmtClient;
         this.properties = properties;
+        this.responseTimeout = properties.getRemoteTimeout();
         
         // Build cache based on configuration
         PluginProperties.CacheProperties cacheConfig = properties.getCache();
@@ -98,8 +109,51 @@ public class CachingProcessMappingService implements ProcessMappingService {
         
         this.cache = cacheBuilder.buildAsync();
         
-        log.info("Initialized CachingProcessMappingService: ttl={}, maxEntries={}, refresh={}",
-                cacheConfig.getTtl(), cacheConfig.getMaxEntries(), cacheConfig.isBackgroundRefresh());
+        log.info("Initialized CachingProcessMappingService: ttl={}, maxEntries={}, refresh={}, responseTimeout={}",
+                cacheConfig.getTtl(), cacheConfig.getMaxEntries(), cacheConfig.isBackgroundRefresh(), responseTimeout);
+    }
+    
+    /**
+     * Constructor that creates a WebClient with timeout configuration from properties.
+     * This is the preferred constructor for production use.
+     */
+    public CachingProcessMappingService(
+            String configMgmtBaseUrl,
+            PluginProperties properties) {
+        this.properties = properties;
+        this.responseTimeout = properties.getRemoteTimeout();
+        
+        // Create WebClient with timeout configuration
+        Duration connectTimeout = properties.getRemoteTimeout();
+        
+        HttpClient httpClient = HttpClient.create()
+                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, (int) connectTimeout.toMillis())
+                .doOnConnected(conn -> conn
+                        .addHandlerLast(new ReadTimeoutHandler(connectTimeout.toMillis(), TimeUnit.MILLISECONDS))
+                        .addHandlerLast(new WriteTimeoutHandler(connectTimeout.toMillis(), TimeUnit.MILLISECONDS)));
+        
+        this.configMgmtClient = WebClient.builder()
+                .baseUrl(configMgmtBaseUrl)
+                .clientConnector(new ReactorClientHttpConnector(httpClient))
+                .build();
+        
+        // Build cache based on configuration
+        PluginProperties.CacheProperties cacheConfig = properties.getCache();
+        
+        Caffeine<Object, Object> cacheBuilder = Caffeine.newBuilder()
+                .maximumSize(cacheConfig.getMaxEntries())
+                .expireAfterWrite(cacheConfig.getTtl())
+                .recordStats();
+        
+        if (cacheConfig.isBackgroundRefresh()) {
+            cacheBuilder.refreshAfterWrite(cacheConfig.getTtl().dividedBy(2));
+        }
+        
+        this.cache = cacheBuilder.buildAsync();
+        
+        log.info("Initialized CachingProcessMappingService with configured timeouts: " +
+                "ttl={}, maxEntries={}, refresh={}, connectTimeout={}",
+                cacheConfig.getTtl(), cacheConfig.getMaxEntries(), cacheConfig.isBackgroundRefresh(), connectTimeout);
     }
     
     @Override
@@ -173,10 +227,15 @@ public class CachingProcessMappingService implements ProcessMappingService {
                 })
                 .retrieve()
                 .bodyToMono(ApiProcessMappingResponse.class)
+                .timeout(responseTimeout)
                 .map(this::toProcessMapping)
                 .switchIfEmpty(createDefaultMapping(operationId))
                 .onErrorResume(error -> {
-                    log.warn("Failed to fetch mapping from config-mgmt: {}, using default", error.getMessage());
+                    if (error instanceof java.util.concurrent.TimeoutException) {
+                        log.warn("Timeout fetching mapping from config-mgmt for operation: {}, using default", operationId);
+                    } else {
+                        log.warn("Failed to fetch mapping from config-mgmt: {}, using default", error.getMessage());
+                    }
                     return createDefaultMapping(operationId);
                 });
     }

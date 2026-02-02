@@ -17,6 +17,7 @@
 package com.firefly.common.application.plugin;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.firefly.common.application.plugin.config.PluginObjectMapperConfig;
 import lombok.Builder;
 import lombok.Singular;
 import lombok.Value;
@@ -56,7 +57,15 @@ import java.util.Map;
 @Builder(toBuilder = true)
 public class ProcessResult {
     
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    /**
+     * Gets the configured ObjectMapper for output conversion.
+     * Uses the centralized PluginObjectMapperConfig for proper configuration.
+     * 
+     * @return the configured ObjectMapper
+     */
+    private static ObjectMapper getObjectMapper() {
+        return PluginObjectMapperConfig.getInstance();
+    }
     
     /**
      * Execution status.
@@ -297,7 +306,7 @@ public class ProcessResult {
             return (T) output;
         }
         try {
-            return OBJECT_MAPPER.convertValue(output, type);
+            return getObjectMapper().convertValue(output, type);
         } catch (Exception e) {
             throw new IllegalArgumentException("Failed to convert output to " + type.getName(), e);
         }

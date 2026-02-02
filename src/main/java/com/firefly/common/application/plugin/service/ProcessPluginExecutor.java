@@ -25,9 +25,10 @@ import com.firefly.common.application.plugin.ProcessPluginRegistry;
 import com.firefly.common.application.plugin.ProcessResult;
 import com.firefly.common.application.plugin.ValidationResult;
 import com.firefly.common.application.plugin.config.PluginProperties;
+import com.firefly.common.application.plugin.event.PluginEventPublisher;
 import com.firefly.common.application.plugin.exception.ProcessNotFoundException;
+import com.firefly.common.application.plugin.metrics.PluginMetricsService;
 import com.firefly.common.application.security.SecurityAuthorizationService;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
@@ -81,13 +82,29 @@ import java.util.UUID;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class ProcessPluginExecutor {
     
     private final ProcessPluginRegistry registry;
     private final ProcessMappingService mappingService;
     private final SecurityAuthorizationService authorizationService;
     private final PluginProperties properties;
+    private final PluginEventPublisher eventPublisher;
+    private final PluginMetricsService metricsService;
+    
+    public ProcessPluginExecutor(
+            ProcessPluginRegistry registry,
+            ProcessMappingService mappingService,
+            SecurityAuthorizationService authorizationService,
+            PluginProperties properties,
+            PluginEventPublisher eventPublisher,
+            PluginMetricsService metricsService) {
+        this.registry = registry;
+        this.mappingService = mappingService;
+        this.authorizationService = authorizationService;
+        this.properties = properties;
+        this.eventPublisher = eventPublisher;
+        this.metricsService = metricsService;
+    }
     
     /**
      * Executes a process for the given operation.
@@ -204,6 +221,10 @@ public class ProcessPluginExecutor {
                     processId, metadata.getReplacedBy());
         }
         
+        // Publish execution started event and record metrics
+        publishExecutionStarted(processId, plugin.getVersion(), executionId, 
+                mapping.getOperationId(), context.getTenantId());
+        
         // Validate permissions
         return validateProcessPermissions(context, metadata)
                 .then(Mono.defer(() -> {
@@ -241,9 +262,13 @@ public class ProcessPluginExecutor {
                     long duration = System.currentTimeMillis() - startTime;
                     if (result.isSuccess()) {
                         log.debug("Process {} completed successfully in {}ms", processId, duration);
+                        publishExecutionCompleted(processId, plugin.getVersion(), executionId,
+                                mapping.getOperationId(), context.getTenantId(), duration, result.getStatus());
                     } else {
                         log.warn("Process {} completed with status {} in {}ms: {}",
                                 processId, result.getStatus(), duration, result.getErrorMessage());
+                        publishExecutionCompleted(processId, plugin.getVersion(), executionId,
+                                mapping.getOperationId(), context.getTenantId(), duration, result.getStatus());
                     }
                 });
     }
@@ -328,48 +353,77 @@ public class ProcessPluginExecutor {
             long startTime) {
         
         long duration = System.currentTimeMillis() - startTime;
+        String errorCode;
+        ProcessResult.Status status;
         
         if (error instanceof ProcessNotFoundException) {
             log.error("Process not found: {} ({}ms)", processId, duration);
-            return Mono.just(ProcessResult.builder()
-                    .status(ProcessResult.Status.TECHNICAL_ERROR)
-                    .errorCode("PROCESS_NOT_FOUND")
-                    .errorMessage(error.getMessage())
-                    .executionId(executionId)
-                    .executionTimeMs(duration)
-                    .build());
-        }
-        
-        if (error instanceof AccessDeniedException) {
+            errorCode = "PROCESS_NOT_FOUND";
+            status = ProcessResult.Status.TECHNICAL_ERROR;
+        } else if (error instanceof AccessDeniedException) {
             log.warn("Access denied for process: {} ({}ms) - {}", processId, duration, error.getMessage());
-            return Mono.just(ProcessResult.builder()
-                    .status(ProcessResult.Status.BUSINESS_ERROR)
-                    .errorCode("ACCESS_DENIED")
-                    .errorMessage(error.getMessage())
-                    .executionId(executionId)
-                    .executionTimeMs(duration)
-                    .build());
-        }
-        
-        if (error instanceof java.util.concurrent.TimeoutException) {
+            errorCode = "ACCESS_DENIED";
+            status = ProcessResult.Status.BUSINESS_ERROR;
+        } else if (error instanceof java.util.concurrent.TimeoutException) {
             log.error("Process timeout: {} ({}ms)", processId, duration);
-            return Mono.just(ProcessResult.builder()
-                    .status(ProcessResult.Status.TECHNICAL_ERROR)
-                    .errorCode("PROCESS_TIMEOUT")
-                    .errorMessage("Process execution timed out")
-                    .executionId(executionId)
-                    .executionTimeMs(duration)
-                    .build());
+            errorCode = "PROCESS_TIMEOUT";
+            status = ProcessResult.Status.TECHNICAL_ERROR;
+        } else {
+            log.error("Process execution failed: {} ({}ms)", processId, duration, error);
+            errorCode = error.getClass().getSimpleName();
+            status = ProcessResult.Status.TECHNICAL_ERROR;
         }
         
-        log.error("Process execution failed: {} ({}ms)", processId, duration, error);
+        // Publish failure event and record metrics
+        publishExecutionFailed(processId, null, executionId, processId, null, 
+                duration, errorCode, error.getMessage(), error);
+        
         return Mono.just(ProcessResult.builder()
-                .status(ProcessResult.Status.TECHNICAL_ERROR)
-                .errorCode(error.getClass().getSimpleName())
+                .status(status)
+                .errorCode(errorCode)
                 .errorMessage(error.getMessage())
-                .exception(error)
+                .exception(status == ProcessResult.Status.TECHNICAL_ERROR ? error : null)
                 .executionId(executionId)
                 .executionTimeMs(duration)
                 .build());
+    }
+    
+    // ==================== Event and Metrics Publishing ====================
+    
+    private void publishExecutionStarted(String processId, String version, String executionId,
+                                         String operationId, UUID tenantId) {
+        if (eventPublisher != null) {
+            eventPublisher.publishExecutionStarted(processId, version, executionId, operationId, tenantId);
+        }
+        if (metricsService != null) {
+            metricsService.recordExecutionStart(processId, executionId);
+        }
+    }
+    
+    private void publishExecutionCompleted(String processId, String version, String executionId,
+                                           String operationId, UUID tenantId, long durationMs,
+                                           ProcessResult.Status status) {
+        if (eventPublisher != null) {
+            eventPublisher.publishExecutionCompleted(processId, version, executionId, 
+                    operationId, tenantId, durationMs, status);
+        }
+        if (metricsService != null) {
+            metricsService.recordExecutionComplete(processId, executionId, durationMs, status);
+        }
+    }
+    
+    private void publishExecutionFailed(String processId, String version, String executionId,
+                                        String operationId, UUID tenantId, long durationMs,
+                                        String errorCode, String errorMessage, Throwable exception) {
+        if (eventPublisher != null) {
+            eventPublisher.publishExecutionFailed(processId, version, executionId, 
+                    operationId, tenantId, durationMs, errorCode, errorMessage, exception);
+        }
+        if (metricsService != null) {
+            metricsService.recordExecutionComplete(processId, executionId, durationMs, 
+                    ProcessResult.Status.TECHNICAL_ERROR);
+            metricsService.recordError(processId, errorCode, 
+                    exception != null ? exception.getClass().getName() : null);
+        }
     }
 }

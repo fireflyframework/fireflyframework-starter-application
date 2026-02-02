@@ -94,6 +94,31 @@ public class PluginProperties {
     private CacheProperties cache = new CacheProperties();
     
     /**
+     * Event publishing configuration.
+     */
+    private EventProperties events = new EventProperties();
+    
+    /**
+     * Metrics configuration.
+     */
+    private MetricsProperties metrics = new MetricsProperties();
+    
+    /**
+     * Health check configuration.
+     */
+    private HealthProperties health = new HealthProperties();
+    
+    /**
+     * Circuit breaker configuration.
+     */
+    private CircuitBreakerProperties circuitBreaker = new CircuitBreakerProperties();
+    
+    /**
+     * Default timeout for remote operations (config-mgmt calls, remote downloads, etc.).
+     */
+    private Duration remoteTimeout = Duration.ofSeconds(30);
+    
+    /**
      * Registry-specific configuration.
      */
     @Data
@@ -354,5 +379,111 @@ public class PluginProperties {
          * Whether to refresh cache entries in the background.
          */
         private boolean backgroundRefresh = true;
+    }
+    
+    /**
+     * Event publishing configuration.
+     */
+    @Data
+    public static class EventProperties {
+        
+        /**
+         * Whether event publishing is enabled.
+         */
+        private boolean enabled = true;
+        
+        /**
+         * Whether to publish execution start/complete/failed events.
+         * These can be high-volume, so disable for performance if not needed.
+         */
+        private boolean publishExecutionEvents = true;
+    }
+    
+    /**
+     * Metrics configuration.
+     */
+    @Data
+    public static class MetricsProperties {
+        
+        /**
+         * Whether metrics collection is enabled.
+         */
+        private boolean enabled = true;
+        
+        /**
+         * Whether to collect detailed per-process metrics.
+         * Enabling this creates separate timers/counters for each process ID.
+         */
+        private boolean detailedPerProcess = true;
+    }
+    
+    /**
+     * Health check configuration.
+     */
+    @Data
+    public static class HealthProperties {
+        
+        /**
+         * Whether health checks are enabled.
+         */
+        private boolean enabled = true;
+        
+        /**
+         * Whether to check individual plugin health.
+         * When enabled, each plugin's healthCheck() method is called.
+         */
+        private boolean checkIndividualPlugins = false;
+        
+        /**
+         * Timeout for health check operations.
+         */
+        private Duration timeout = Duration.ofSeconds(10);
+    }
+    
+    /**
+     * Circuit breaker configuration for remote plugin loading.
+     */
+    @Data
+    public static class CircuitBreakerProperties {
+        
+        /**
+         * Whether circuit breaker is enabled.
+         */
+        private boolean enabled = true;
+        
+        /**
+         * Failure rate threshold percentage to open the circuit.
+         */
+        private float failureRateThreshold = 50.0f;
+        
+        /**
+         * Slow call rate threshold percentage.
+         */
+        private float slowCallRateThreshold = 100.0f;
+        
+        /**
+         * Duration threshold for slow calls.
+         */
+        private Duration slowCallDurationThreshold = Duration.ofSeconds(10);
+        
+        /**
+         * Number of calls in the sliding window.
+         */
+        private int slidingWindowSize = 10;
+        
+        /**
+         * Minimum number of calls before the circuit breaker can calculate the error rate.
+         */
+        private int minimumNumberOfCalls = 5;
+        
+        /**
+         * Time to wait in open state before transitioning to half-open.
+         */
+        private Duration waitDurationInOpenState = Duration.ofSeconds(30);
+        
+        /**
+         * Number of permitted calls in half-open state.
+         */
+        private int permittedCallsInHalfOpenState = 3;
     }
 }

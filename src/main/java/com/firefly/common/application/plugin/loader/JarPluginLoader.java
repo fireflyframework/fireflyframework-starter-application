@@ -16,6 +16,7 @@
 
 package com.firefly.common.application.plugin.loader;
 
+import com.firefly.common.application.plugin.DelegatingProcessPlugin;
 import com.firefly.common.application.plugin.ProcessMetadata;
 import com.firefly.common.application.plugin.ProcessPlugin;
 import com.firefly.common.application.plugin.ProcessPluginRegistry;
@@ -34,8 +35,12 @@ import java.io.IOException;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.*;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 
@@ -103,9 +108,55 @@ public class JarPluginLoader implements PluginLoader {
     private WatchService watchService;
     private volatile boolean watching = false;
     
+    /**
+     * Debounce tracking for hot-reload events.
+     */
+    private final Map<String, Instant> lastReloadAttempt = new ConcurrentHashMap<>();
+    private static final Duration RELOAD_DEBOUNCE = Duration.ofSeconds(2);
+    private final ReentrantLock reloadLock = new ReentrantLock();
+    
+    /**
+     * Required interface classes that plugins must be able to access.
+     */
+    private static final List<String> REQUIRED_DEPENDENCY_CLASSES = Arrays.asList(
+            "com.firefly.common.application.plugin.ProcessPlugin",
+            "com.firefly.common.application.plugin.ProcessExecutionContext",
+            "com.firefly.common.application.plugin.ProcessResult",
+            "reactor.core.publisher.Mono"
+    );
+    
+    /**
+     * Flag to track if shutdown hook has been registered.
+     */
+    private final AtomicBoolean shutdownHookRegistered = new AtomicBoolean(false);
+    
     public JarPluginLoader(PluginProperties properties, ProcessPluginRegistry registry) {
         this.properties = properties;
         this.registry = registry;
+        registerShutdownHook();
+    }
+    
+    /**
+     * Registers a JVM shutdown hook to ensure classloaders are closed on forced shutdown.
+     */
+    private void registerShutdownHook() {
+        if (shutdownHookRegistered.compareAndSet(false, true)) {
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                log.info("JVM shutdown detected, cleaning up JAR plugin classloaders");
+                watching = false;
+                if (watchService != null) {
+                    try {
+                        watchService.close();
+                    } catch (IOException e) {
+                        // Ignore during shutdown
+                    }
+                }
+                // Close all classloaders synchronously
+                for (String jarPath : new ArrayList<>(classLoaders.keySet())) {
+                    closeClassLoader(jarPath);
+                }
+            }, "jar-plugin-shutdown-hook"));
+        }
     }
     
     @Override
@@ -362,6 +413,12 @@ public class JarPluginLoader implements PluginLoader {
      */
     private ProcessPlugin loadPluginClass(URLClassLoader classLoader, String className, String jarPath) {
         try {
+            // Validate dependencies before loading the plugin class
+            if (!validateDependencies(classLoader, jarPath)) {
+                log.error("Dependency validation failed for JAR: {}", jarPath);
+                return null;
+            }
+            
             Class<?> clazz = classLoader.loadClass(className);
             
             if (!ProcessPlugin.class.isAssignableFrom(clazz)) {
@@ -394,6 +451,28 @@ public class JarPluginLoader implements PluginLoader {
     }
     
     /**
+     * Validates that all required dependency classes can be loaded by the classloader.
+     */
+    private boolean validateDependencies(URLClassLoader classLoader, String jarPath) {
+        List<String> missingClasses = new ArrayList<>();
+        
+        for (String requiredClass : REQUIRED_DEPENDENCY_CLASSES) {
+            try {
+                classLoader.loadClass(requiredClass);
+            } catch (ClassNotFoundException e) {
+                missingClasses.add(requiredClass);
+            }
+        }
+        
+        if (!missingClasses.isEmpty()) {
+            log.error("JAR {} is missing required dependencies: {}", jarPath, missingClasses);
+            return false;
+        }
+        
+        return true;
+    }
+    
+    /**
      * Wraps a plugin with metadata from the annotation.
      */
     private ProcessPlugin wrapWithMetadata(ProcessPlugin plugin, FireflyProcess annotation, String jarPath) {
@@ -415,7 +494,7 @@ public class JarPluginLoader implements PluginLoader {
                 .replacedBy(annotation.replacedBy().isEmpty() ? null : annotation.replacedBy())
                 .build();
         
-        return new JarProcessPlugin(plugin, metadata);
+        return DelegatingProcessPlugin.wrap(plugin, metadata);
     }
     
     /**
@@ -539,30 +618,78 @@ public class JarPluginLoader implements PluginLoader {
     }
     
     /**
-     * Reloads a JAR file (unload old, load new).
+     * Reloads a JAR file (unload old, load new) with debouncing.
      */
     private void reloadJar(File jarFile) {
         String jarPath = jarFile.getAbsolutePath();
         
-        // Unload existing plugins from this JAR
-        unloadJar(jarPath);
+        // Debounce: skip if we recently attempted to reload this JAR
+        Instant now = Instant.now();
+        Instant lastAttempt = lastReloadAttempt.get(jarPath);
+        if (lastAttempt != null && Duration.between(lastAttempt, now).compareTo(RELOAD_DEBOUNCE) < 0) {
+            log.debug("Skipping reload for {} - debounce in effect", jarFile.getName());
+            return;
+        }
+        lastReloadAttempt.put(jarPath, now);
         
-        // Small delay to ensure file is fully written
-        try {
-            Thread.sleep(500);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
+        // Use lock to prevent concurrent reloads of the same JAR
+        if (!reloadLock.tryLock()) {
+            log.debug("Skipping reload for {} - another reload in progress", jarFile.getName());
             return;
         }
         
-        // Load new version
-        loadJarFile(jarFile)
-                .flatMap(plugin -> plugin.onInit().then(registry.register(plugin)))
-                .subscribe(
-                        v -> {},
-                        error -> log.error("Error reloading JAR: {}", jarPath, error),
-                        () -> log.info("Reloaded JAR: {}", jarFile.getName())
-                );
+        try {
+            // Wait for file to be fully written using file stability check
+            if (!waitForFileStable(jarFile, Duration.ofMillis(500), 5)) {
+                log.warn("File {} did not stabilize, skipping reload", jarFile.getName());
+                return;
+            }
+            
+            // Unload existing plugins from this JAR
+            unloadJar(jarPath);
+            
+            // Load new version
+            loadJarFile(jarFile)
+                    .flatMap(plugin -> plugin.onInit().then(registry.register(plugin)))
+                    .subscribe(
+                            v -> {},
+                            error -> log.error("Error reloading JAR: {}", jarPath, error),
+                            () -> log.info("Reloaded JAR: {}", jarFile.getName())
+                    );
+        } finally {
+            reloadLock.unlock();
+        }
+    }
+    
+    /**
+     * Waits for a file to become stable (size not changing) before proceeding.
+     * This is better than a fixed Thread.sleep() as it adapts to actual file write completion.
+     */
+    private boolean waitForFileStable(File file, Duration checkInterval, int maxChecks) {
+        long lastSize = -1;
+        int stableCount = 0;
+        
+        for (int i = 0; i < maxChecks; i++) {
+            long currentSize = file.length();
+            if (currentSize == lastSize && currentSize > 0) {
+                stableCount++;
+                if (stableCount >= 2) {
+                    return true; // File size stable for 2 consecutive checks
+                }
+            } else {
+                stableCount = 0;
+            }
+            lastSize = currentSize;
+            
+            try {
+                Thread.sleep(checkInterval.toMillis());
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return false;
+            }
+        }
+        
+        return file.exists() && file.length() > 0;
     }
     
     /**
@@ -584,60 +711,5 @@ public class JarPluginLoader implements PluginLoader {
         closeClassLoader(jarPath);
     }
     
-    /**
-     * Wrapper for JAR-loaded plugins with metadata.
-     */
-    private static class JarProcessPlugin implements ProcessPlugin {
-        
-        private final ProcessPlugin delegate;
-        private final ProcessMetadata metadata;
-        
-        JarProcessPlugin(ProcessPlugin delegate, ProcessMetadata metadata) {
-            this.delegate = delegate;
-            this.metadata = metadata;
-        }
-        
-        @Override
-        public String getProcessId() {
-            return metadata.getProcessId();
-        }
-        
-        @Override
-        public String getVersion() {
-            return metadata.getVersion();
-        }
-        
-        @Override
-        public ProcessMetadata getMetadata() {
-            return metadata;
-        }
-        
-        @Override
-        public reactor.core.publisher.Mono<com.firefly.common.application.plugin.ProcessResult> execute(
-                com.firefly.common.application.plugin.ProcessExecutionContext context) {
-            return delegate.execute(context);
-        }
-        
-        @Override
-        public reactor.core.publisher.Mono<com.firefly.common.application.plugin.ValidationResult> validate(
-                com.firefly.common.application.plugin.ProcessExecutionContext context) {
-            return delegate.validate(context);
-        }
-        
-        @Override
-        public reactor.core.publisher.Mono<com.firefly.common.application.plugin.ProcessResult> compensate(
-                com.firefly.common.application.plugin.ProcessExecutionContext context) {
-            return delegate.compensate(context);
-        }
-        
-        @Override
-        public reactor.core.publisher.Mono<Void> onInit() {
-            return delegate.onInit();
-        }
-        
-        @Override
-        public reactor.core.publisher.Mono<Void> onDestroy() {
-            return delegate.onDestroy();
-        }
-    }
+    // JarProcessPlugin inner class removed - using DelegatingProcessPlugin.wrap() instead
 }
