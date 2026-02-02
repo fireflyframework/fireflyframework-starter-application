@@ -15,6 +15,9 @@ The Plugin Architecture enables Firefly application microservices to act as **"c
 | **ProcessPluginRegistry** | Thread-safe registry of loaded plugins |
 | **ProcessPluginExecutor** | Orchestration service for executing plugins |
 | **ProcessMappingService** | Resolves operations to processes via config |
+| **PluginEventPublisher** | Publishes plugin lifecycle and execution events |
+| **PluginMetricsService** | Collects execution metrics via Micrometer |
+| **PluginHealthIndicator** | Spring Boot Actuator health endpoint |
 
 ## Quick Start: Creating Your First Plugin
 
@@ -388,7 +391,7 @@ protected Mono<TransferResponse> doExecute(
 
 ### Technical Errors
 
-Technical errors are handled automatically, but you can customize:
+Technical errors are handled automatically with execution phase tracking:
 
 ```java
 @Override
@@ -399,9 +402,115 @@ protected Mono<ProcessResult> handleError(Throwable error) {
             "Operation timed out, please retry"));
     }
     
-    // Fall back to default handling
+    // Fall back to default handling - errors are wrapped in PluginExecutionException
+    // with phase information (INITIALIZATION, INPUT_CONVERSION, VALIDATION, 
+    // EXECUTION, COMPENSATION, OUTPUT_CONVERSION)
     return super.handleError(error);
 }
+```
+
+### Execution Phases
+
+The plugin system tracks which phase an error occurred in:
+
+| Phase | Description |
+|-------|-------------|
+| `INITIALIZATION` | Plugin initialization failed |
+| `INPUT_CONVERSION` | Failed to convert input to expected type |
+| `VALIDATION` | Input validation failed |
+| `EXECUTION` | Business logic execution failed |
+| `COMPENSATION` | Compensation/rollback failed |
+| `OUTPUT_CONVERSION` | Failed to convert output |
+
+## Health Checks
+
+Plugins can implement health checks for monitoring:
+
+```java
+@FireflyProcess(id = "my-process", version = "1.0.0")
+@Component
+public class MyProcess extends AbstractProcessPlugin<Request, Response> {
+    
+    private final ExternalService externalService;
+    
+    @Override
+    public Mono<HealthStatus> healthCheck() {
+        return externalService.ping()
+            .map(ok -> HealthStatus.up()
+                .detail("externalService", "connected")
+                .build())
+            .onErrorReturn(HealthStatus.down()
+                .detail("externalService", "disconnected")
+                .build());
+    }
+    
+    @Override
+    protected Mono<Response> doExecute(ProcessExecutionContext context, Request input) {
+        // Business logic
+    }
+}
+```
+
+Health status is exposed via Spring Boot Actuator at `/actuator/health`.
+
+## Observability
+
+### Events
+
+The plugin system publishes Spring events for monitoring:
+
+```java
+@Component
+public class PluginEventListener {
+    
+    @EventListener
+    public void onPluginRegistered(PluginEvent.PluginRegisteredEvent event) {
+        log.info("Plugin registered: {} v{}", 
+            event.getProcessId(), event.getProcessVersion());
+    }
+    
+    @EventListener
+    public void onExecutionCompleted(PluginEvent.PluginExecutionCompletedEvent event) {
+        log.info("Plugin {} executed in {}ms with status {}",
+            event.getProcessId(), event.getDurationMs(), event.getStatus());
+    }
+    
+    @EventListener
+    public void onExecutionFailed(PluginEvent.PluginExecutionFailedEvent event) {
+        log.error("Plugin {} failed: {} - {}",
+            event.getProcessId(), event.getErrorCode(), event.getErrorMessage());
+    }
+}
+```
+
+### Metrics
+
+Metrics are automatically collected via Micrometer:
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `plugin.executions.total` | Counter | Total executions by process and status |
+| `plugin.executions.active` | Gauge | Currently running executions |
+| `plugin.execution.duration` | Timer | Execution duration histogram |
+| `plugin.errors.total` | Counter | Errors by process and error code |
+| `plugin.registry.count` | Gauge | Number of registered plugins |
+
+Configuration:
+
+```yaml
+firefly:
+  application:
+    plugin:
+      metrics:
+        enabled: true
+        detailed-per-process: true  # Separate metrics per process ID
+      events:
+        enabled: true
+        publish-execution-events: true  # Can be disabled for performance
+      health:
+        enabled: true
+        check-individual-plugins: false  # Enable to call each plugin's healthCheck()
+        timeout: PT10S
 ```
 
 ## Loading Plugins from External JARs
@@ -653,7 +762,27 @@ class AccountCreationIntegrationTest {
 
 ## Best Practices
 
-### 1. Keep Plugins Focused
+### 1. Implement Health Checks for External Dependencies
+
+```java
+@Override
+public Mono<HealthStatus> healthCheck() {
+    return checkDatabaseConnection()
+        .zipWith(checkExternalApi())
+        .map(tuple -> {
+            if (tuple.getT1() && tuple.getT2()) {
+                return HealthStatus.up().build();
+            }
+            return HealthStatus.degraded()
+                .detail("database", tuple.getT1() ? "up" : "down")
+                .detail("externalApi", tuple.getT2() ? "up" : "down")
+                .build();
+        })
+        .onErrorReturn(HealthStatus.down().build());
+}
+```
+
+### 2. Keep Plugins Focused
 
 Each plugin should do one thing well:
 

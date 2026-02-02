@@ -152,8 +152,14 @@ The plugin will be automatically discovered and loaded (with hot-reload, no rest
 | Event | Action |
 |-------|--------|
 | New JAR added | Plugins discovered and registered |
-| JAR modified | Old plugins unloaded, new versions loaded |
+| JAR modified | Old plugins unloaded, new versions loaded (with debouncing) |
 | JAR removed | Plugins unregistered |
+
+**Debouncing:** The loader uses a 2-second debounce window to prevent multiple reloads when a file is being written. It also performs file stability checks (verifying file size stops changing) before reloading.
+
+**Thread Safety:** Hot-reload operations are protected by a lock to prevent concurrent reload attempts for the same JAR.
+
+**Dependency Validation:** Before loading a plugin, the loader validates that all required classes (ProcessPlugin, ProcessExecutionContext, ProcessResult, Mono) can be loaded by the classloader.
 
 ### Classloader Isolation
 
@@ -168,11 +174,17 @@ When `classloader-isolation: false`:
 - All JARs share the application classloader
 - Faster loading, but potential version conflicts
 
+### Shutdown Hook
+
+The JAR loader registers a JVM shutdown hook to ensure classloaders are properly closed even during forced shutdown (SIGKILL), preventing memory leaks.
+
 ### Advantages
 
 - Hot-reload without restart
 - Deploy tenant-specific plugins dynamically
 - Classloader isolation for dependency management
+- Automatic dependency validation
+- Memory leak prevention with shutdown hooks
 
 ### Limitations
 
@@ -252,6 +264,31 @@ For HTTP repositories, provide the full path in the plugin descriptor:
 }
 ```
 
+### Circuit Breaker
+
+The remote loader includes a Resilience4j circuit breaker to handle download failures gracefully:
+
+```yaml
+firefly:
+  application:
+    plugin:
+      circuit-breaker:
+        enabled: true
+        failure-rate-threshold: 50      # Open circuit at 50% failure rate
+        slow-call-rate-threshold: 100   # Consider all slow calls
+        slow-call-duration-threshold: PT10S
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        wait-duration-in-open-state: PT30S
+        permitted-calls-in-half-open-state: 3
+      remote-timeout: PT30S  # Timeout for remote downloads
+```
+
+Circuit breaker states:
+- **CLOSED**: Normal operation, downloads proceed
+- **OPEN**: Too many failures, downloads rejected immediately
+- **HALF_OPEN**: Testing if service recovered, limited calls allowed
+
 ### On-Demand Loading
 
 Unlike other loaders, the remote loader loads plugins **on-demand**:
@@ -259,9 +296,10 @@ Unlike other loaders, the remote loader loads plugins **on-demand**:
 1. A request comes for operation `createPremiumAccount`
 2. Config-mgmt returns mapping: `processId: "acme-premium-account"`
 3. Process not in registry, descriptor specifies `sourceType: remote`
-4. Remote loader downloads from repository
-5. JAR cached locally, plugin loaded
-6. Subsequent requests use cached version
+4. Circuit breaker checked - if OPEN, fail fast with error
+5. Remote loader downloads from repository (with timeout)
+6. JAR cached locally, plugin loaded
+7. Subsequent requests use cached version
 
 ### Cache Management
 
@@ -308,6 +346,8 @@ When `verify-checksums: true`:
 - Version management via standard Maven workflows
 - Minimal local storage
 - Easy rollback to previous versions
+- Circuit breaker prevents cascading failures
+- Configurable timeouts for reliability
 
 ### Limitations
 
@@ -363,6 +403,30 @@ firefly:
       cache:
         enabled: true
         ttl: PT1H
+      
+      # Remote timeout
+      remote-timeout: PT30S
+      
+      # Circuit breaker for remote loading
+      circuit-breaker:
+        enabled: true
+        failure-rate-threshold: 50
+        sliding-window-size: 10
+        wait-duration-in-open-state: PT30S
+      
+      # Observability
+      events:
+        enabled: true
+        publish-execution-events: true
+      
+      metrics:
+        enabled: true
+        detailed-per-process: true
+      
+      health:
+        enabled: true
+        check-individual-plugins: false
+        timeout: PT10S
 ```
 
 ### Environment-Specific Overrides

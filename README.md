@@ -776,6 +776,9 @@ The Plugin Architecture enables Firefly application microservices to act as **"c
 - **Multiple Loading Strategies**: Spring beans, external JARs, or remote repositories
 - **Hot-Reload Support**: Update plugins without application restart (JAR/Remote loaders)
 - **Security Sandbox**: Isolated execution for external plugins
+- **Observability**: Built-in health checks, metrics (Micrometer), and event publishing
+- **Circuit Breaker**: Resilience4j integration for remote plugin loading
+- **Execution Phase Tracking**: Detailed error context with execution phase information
 
 ### Architecture Overview
 
@@ -877,6 +880,9 @@ In `common-platform-config-mgmt`, configure which process handles each operation
 | `SpringBeanPluginLoader` | Discovers plugins from Spring context |
 | `JarPluginLoader` | Loads plugins from external JAR files |
 | `RemoteRepositoryPluginLoader` | Downloads and loads plugins from Maven/HTTP |
+| `PluginEventPublisher` | Publishes lifecycle and execution events |
+| `PluginMetricsService` | Collects execution metrics via Micrometer |
+| `PluginHealthIndicator` | Spring Boot Actuator health endpoint |
 
 ### Configuration
 
@@ -911,6 +917,21 @@ firefly:
       cache:
         enabled: true
         ttl: PT1H
+      # Observability
+      events:
+        enabled: true
+        publish-execution-events: true
+      metrics:
+        enabled: true
+        detailed-per-process: true
+      health:
+        enabled: true
+        check-individual-plugins: false
+      # Circuit breaker for remote loading
+      circuit-breaker:
+        enabled: true
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: PT30S
 ```
 
 ### Plugin Architecture Documentation
