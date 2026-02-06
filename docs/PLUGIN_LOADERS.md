@@ -114,7 +114,7 @@ firefly:
 
 ```xml
 <dependency>
-    <groupId>com.firefly</groupId>
+    <groupId>org.fireflyframework</groupId>
     <artifactId>lib-common-application</artifactId>
     <version>1.0.0-SNAPSHOT</version>
     <scope>provided</scope> <!-- Provided by the host application -->
@@ -396,7 +396,7 @@ firefly:
         sandbox-enabled: true
         max-execution-time: PT30S
         allowed-packages:
-          - com.firefly
+          - org.fireflyframework
           - com.acme.bank
       
       # Cache settings
@@ -496,7 +496,7 @@ PluginDescriptor descriptor = PluginDescriptor.builder()
 ```bash
 logging:
   level:
-    com.firefly.common.application.plugin.loader: DEBUG
+    org.fireflyframework.application.plugin.loader: DEBUG
 ```
 
 ### ClassNotFoundException in JAR Plugins

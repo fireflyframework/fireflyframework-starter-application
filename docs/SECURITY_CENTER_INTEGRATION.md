@@ -169,7 +169,7 @@ sessionManager.createOrGetSession(exchange)
 
 ```xml
 <dependency>
-    <groupId>com.firefly</groupId>
+    <groupId>org.fireflyframework</groupId>
     <artifactId>common-platform-security-center-session</artifactId>
     <version>${project.version}</version>
 </dependency>
@@ -184,7 +184,7 @@ This brings in:
 
 ### 2. SessionContextMapper Utility
 
-**File:** `lib-common-application/src/main/java/com/firefly/common/application/util/SessionContextMapper.java`
+**File:** `lib-common-application/src/main/java/org/fireflyframework/common/application/util/SessionContextMapper.java`
 
 **Purpose:** Utility class for extracting roles and permissions from `SessionContextDTO`.
 
@@ -239,7 +239,7 @@ public static boolean hasPermission(
 
 ### 3. DefaultContextResolver Integration
 
-**File:** `lib-common-application/src/main/java/com/firefly/common/application/resolver/DefaultContextResolver.java`
+**File:** `lib-common-application/src/main/java/org/fireflyframework/common/application/resolver/DefaultContextResolver.java`
 
 **Changes:**
 
@@ -293,7 +293,7 @@ protected Mono<Set<String>> resolvePermissions(AppContext context, ServerWebExch
 
 ### 4. DefaultSecurityAuthorizationService Integration
 
-**File:** `lib-common-application/src/main/java/com/firefly/common/application/security/DefaultSecurityAuthorizationService.java`
+**File:** `lib-common-application/src/main/java/org/fireflyframework/common/application/security/DefaultSecurityAuthorizationService.java`
 
 **Changes:**
 
@@ -624,10 +624,10 @@ Enable detailed logging to troubleshoot:
 ```yaml
 logging:
   level:
-    com.firefly.common.application.resolver: DEBUG
-    com.firefly.common.application.security: DEBUG
-    com.firefly.common.application.util: DEBUG
-    com.firefly.security.center: DEBUG
+    org.fireflyframework.application.resolver: DEBUG
+    org.fireflyframework.application.security: DEBUG
+    org.fireflyframework.application.util: DEBUG
+    org.fireflyframework.security.center: DEBUG
 ```
 
 **Logs to check:**

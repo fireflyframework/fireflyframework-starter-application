@@ -17,5 +17,5 @@ firefly:
 
 logging:
   level:
-    com.firefly.common.application: DEBUG
+    org.fireflyframework.application: DEBUG
     org.springframework: WARN

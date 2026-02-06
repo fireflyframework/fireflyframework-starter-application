@@ -55,7 +55,7 @@ Add the library to your `pom.xml`:
 
 ```xml
 <dependency>
-    <groupId>com.firefly</groupId>
+    <groupId>org.fireflyframework</groupId>
     <artifactId>lib-common-application</artifactId>
     <version>1.0.0-SNAPSHOT</version>
 </dependency>
@@ -90,8 +90,8 @@ Create a context resolver for your microservice:
 ```java
 package com.mycompany.myservice.application.resolver;
 
-import com.firefly.common.application.context.AppContext;
-import com.firefly.common.application.resolver.AbstractContextResolver;
+import org.fireflyframework.application.context.AppContext;
+import org.fireflyframework.application.resolver.AbstractContextResolver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.context.ReactiveSecurityContextHolder;
@@ -166,8 +166,8 @@ Create a config resolver that integrates with your config management service:
 ```java
 package com.mycompany.myservice.application.resolver;
 
-import com.firefly.common.application.context.AppConfig;
-import com.firefly.common.application.resolver.AbstractConfigResolver;
+import org.fireflyframework.application.context.AppConfig;
+import org.fireflyframework.application.resolver.AbstractConfigResolver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -238,7 +238,7 @@ Create an authorization service:
 ```java
 package com.mycompany.myservice.application.security;
 
-import com.firefly.common.application.security.AbstractSecurityAuthorizationService;
+import org.fireflyframework.application.security.AbstractSecurityAuthorizationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -266,11 +266,11 @@ Create an application service that extends `AbstractApplicationService`:
 ```java
 package com.mycompany.myservice.application.service;
 
-import com.firefly.common.application.context.ApplicationExecutionContext;
-import com.firefly.common.application.resolver.ConfigResolver;
-import com.firefly.common.application.resolver.ContextResolver;
-import com.firefly.common.application.security.SecurityAuthorizationService;
-import com.firefly.common.application.service.AbstractApplicationService;
+import org.fireflyframework.application.context.ApplicationExecutionContext;
+import org.fireflyframework.application.resolver.ConfigResolver;
+import org.fireflyframework.application.resolver.ContextResolver;
+import org.fireflyframework.application.security.SecurityAuthorizationService;
+import org.fireflyframework.application.service.AbstractApplicationService;
 import com.mycompany.myservice.domain.model.Transfer;
 import com.mycompany.myservice.domain.service.AccountDomainService;
 import lombok.extern.slf4j.Slf4j;
@@ -367,7 +367,7 @@ Create a controller that uses the `@Secure` annotation:
 ```java
 package com.mycompany.myservice.presentation.controller;
 
-import com.firefly.common.application.security.annotation.Secure;
+import org.fireflyframework.application.security.annotation.Secure;
 import com.mycompany.myservice.application.service.AccountApplicationService;
 import com.mycompany.myservice.domain.model.Transfer;
 import lombok.RequiredArgsConstructor;
@@ -445,7 +445,7 @@ Register security rules programmatically:
 ```java
 package com.mycompany.myservice.config;
 
-import com.firefly.common.application.security.EndpointSecurityRegistry;
+import org.fireflyframework.application.security.EndpointSecurityRegistry;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
@@ -683,7 +683,7 @@ class AccountApplicationServiceIntegrationTest {
 - Verify that your `ContextResolver` is properly registered as a Spring bean
 - Check that the `supports()` method returns true for your requests
 - Verify authentication headers/tokens are present
-- Enable debug logging: `logging.level.com.firefly.common.application=DEBUG`
+- Enable debug logging: `logging.level.org.fireflyframework.application=DEBUG`
 
 #### 2. Security Checks Fail
 
@@ -722,10 +722,10 @@ Enable verbose logging:
 ```yaml
 logging:
   level:
-    com.firefly.common.application: DEBUG
-    com.firefly.common.application.aop: TRACE
-    com.firefly.common.application.resolver: DEBUG
-    com.firefly.common.application.security: DEBUG
+    org.fireflyframework.application: DEBUG
+    org.fireflyframework.application.aop: TRACE
+    org.fireflyframework.application.resolver: DEBUG
+    org.fireflyframework.application.security: DEBUG
 ```
 
 Use Actuator for introspection:

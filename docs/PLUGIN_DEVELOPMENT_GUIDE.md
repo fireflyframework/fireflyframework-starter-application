@@ -1,6 +1,6 @@
 # Firefly Plugin Development Guide
 
-This guide walks you through creating process plugins for the Firefly Banking Platform's Plugin Architecture.
+This guide walks you through creating process plugins for the Firefly Framework's Plugin Architecture.
 
 ## Overview
 
@@ -27,7 +27,7 @@ Your plugin project only needs the `lib-common-application` dependency:
 
 ```xml
 <dependency>
-    <groupId>com.firefly</groupId>
+    <groupId>org.fireflyframework</groupId>
     <artifactId>lib-common-application</artifactId>
     <version>1.0.0-SNAPSHOT</version>
 </dependency>
@@ -40,10 +40,10 @@ The simplest way is to extend `AbstractProcessPlugin`:
 ```java
 package com.mybank.process.account;
 
-import com.firefly.common.application.plugin.AbstractProcessPlugin;
-import com.firefly.common.application.plugin.ProcessExecutionContext;
-import com.firefly.common.application.plugin.ValidationResult;
-import com.firefly.common.application.plugin.annotation.FireflyProcess;
+import org.fireflyframework.application.plugin.AbstractProcessPlugin;
+import org.fireflyframework.application.plugin.ProcessExecutionContext;
+import org.fireflyframework.application.plugin.ValidationResult;
+import org.fireflyframework.application.plugin.annotation.FireflyProcess;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
@@ -529,7 +529,7 @@ Plugins can be packaged as external JARs and loaded dynamically.
     
     <dependencies>
         <dependency>
-            <groupId>com.firefly</groupId>
+            <groupId>org.fireflyframework</groupId>
             <artifactId>lib-common-application</artifactId>
             <version>1.0.0-SNAPSHOT</version>
             <scope>provided</scope> <!-- Provided by container -->

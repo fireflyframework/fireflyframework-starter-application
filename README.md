@@ -178,7 +178,7 @@ See the comprehensive architecture documentation below.
 
 ```xml
 <dependency>
-    <groupId>com.firefly</groupId>
+    <groupId>org.fireflyframework</groupId>
     <artifactId>lib-common-application</artifactId>
     <version>1.0.0-SNAPSHOT</version>
 </dependency>
@@ -940,7 +940,7 @@ The plugin architecture is **self-contained** within `lib-common-application`. Y
 
 For detailed documentation, see:
 - **[Plugin Development Guide](docs/PLUGIN_DEVELOPMENT_GUIDE.md)** - Comprehensive tutorial for creating plugins
-- [AbstractProcessPlugin](src/main/java/com/firefly/common/application/plugin/AbstractProcessPlugin.java) - Type-safe base class for plugins
+- [AbstractProcessPlugin](src/main/java/org/fireflyframework/common/application/plugin/AbstractProcessPlugin.java) - Type-safe base class for plugins
 - [Plugin Loading Strategies](docs/PLUGIN_LOADERS.md) - JAR, Maven, HTTP loading options
 
 ## Examples
@@ -1113,8 +1113,8 @@ Enable debug logging for troubleshooting:
 ```yaml
 logging:
   level:
-    com.firefly.common.application: DEBUG
-    com.firefly.common.application.aop: TRACE
+    org.fireflyframework.application: DEBUG
+    org.fireflyframework.application.aop: TRACE
 ```
 
 ### Tracing
@@ -1136,7 +1136,7 @@ This library follows strict architectural principles:
 
 ## License
 
-Copyright 2025 Firefly Software Solutions Inc
+Copyright 2024-2026 Firefly Software Solutions Inc
 
 Licensed under the Apache License, Version 2.0
 

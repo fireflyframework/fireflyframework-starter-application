@@ -363,7 +363,7 @@ Tests for the `ApplicationLayerBannerConfig` class - startup banner configuratio
 ```
 src/test/
 ├── java/
-│   └── com/firefly/common/application/
+│   └── org/fireflyframework/common/application/
 │       ├── actuator/
 │       │   └── FireflyApplicationInfoContributorTest.java
 │       ├── config/

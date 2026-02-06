@@ -34,7 +34,7 @@ management:
 # Logging Configuration
 logging:
   level:
-    com.firefly.common.application: INFO
-    com.firefly.common.cache: INFO
+    org.fireflyframework.application: INFO
+    org.fireflyframework.cache: INFO
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"

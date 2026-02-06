@@ -41,7 +41,7 @@
     </appender>
     
     <!-- Application Layer specific logger -->
-    <logger name="com.firefly.common.application" level="INFO" additivity="false">
+    <logger name="org.fireflyframework.application" level="INFO" additivity="false">
         <appender-ref ref="${CONSOLE_APPENDER:-CONSOLE_PLAIN}"/>
     </logger>
     
@@ -53,11 +53,11 @@
     <!-- Profile-specific configurations -->
     <springProfile name="dev,local">
         <property name="CONSOLE_APPENDER" value="CONSOLE_PLAIN"/>
-        <logger name="com.firefly.common.application" level="DEBUG"/>
+        <logger name="org.fireflyframework.application" level="DEBUG"/>
     </springProfile>
     
     <springProfile name="prod,production">
         <property name="CONSOLE_APPENDER" value="CONSOLE_JSON"/>
-        <logger name="com.firefly.common.application" level="INFO"/>
+        <logger name="org.fireflyframework.application" level="INFO"/>
     </springProfile>
 </configuration>

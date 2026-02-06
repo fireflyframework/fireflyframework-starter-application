@@ -296,9 +296,9 @@ customer-application-onboarding/
 ### 1. Main Application Class
 
 ```java
-package com.firefly.application.onboarding.web;
+package org.fireflyframework.application.onboarding.web;
 
-import com.firefly.common.application.annotation.FireflyApplication;
+import org.fireflyframework.application.annotation.FireflyApplication;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
@@ -354,15 +354,15 @@ public class CustomerOnboardingApplication {
 ### 2. REST Controller
 
 ```java
-package com.firefly.application.onboarding.web.controllers;
+package org.fireflyframework.application.onboarding.web.controllers;
 
-import com.firefly.application.onboarding.interfaces.dtos.StartOnboardingRequestDTO;
-import com.firefly.application.onboarding.interfaces.dtos.CompleteOnboardingRequestDTO;
-import com.firefly.application.onboarding.interfaces.dtos.OnboardingResponseDTO;
-import com.firefly.application.onboarding.interfaces.dtos.OnboardingStatusResponseDTO;
-import com.firefly.application.onboarding.core.services.OnboardingApplicationService;
-import com.firefly.common.application.controller.AbstractContractController;
-import com.firefly.common.application.security.annotation.Secure;
+import org.fireflyframework.application.onboarding.interfaces.dtos.StartOnboardingRequestDTO;
+import org.fireflyframework.application.onboarding.interfaces.dtos.CompleteOnboardingRequestDTO;
+import org.fireflyframework.application.onboarding.interfaces.dtos.OnboardingResponseDTO;
+import org.fireflyframework.application.onboarding.interfaces.dtos.OnboardingStatusResponseDTO;
+import org.fireflyframework.application.onboarding.core.services.OnboardingApplicationService;
+import org.fireflyframework.application.controller.AbstractContractController;
+import org.fireflyframework.application.security.annotation.Secure;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -463,14 +463,14 @@ public class OnboardingController extends AbstractContractController {
 ### 3. Application Service (Orchestration)
 
 ```java
-package com.firefly.application.onboarding.core.services;
+package org.fireflyframework.application.onboarding.core.services;
 
-import com.firefly.application.onboarding.core.clients.*;
-import com.firefly.application.onboarding.interfaces.dtos.StartOnboardingRequestDTO;
-import com.firefly.application.onboarding.interfaces.dtos.CompleteOnboardingRequestDTO;
-import com.firefly.application.onboarding.interfaces.dtos.OnboardingResponseDTO;
-import com.firefly.application.onboarding.interfaces.dtos.OnboardingStatusResponseDTO;
-import com.firefly.common.application.service.AbstractApplicationService;
+import org.fireflyframework.application.onboarding.core.clients.*;
+import org.fireflyframework.application.onboarding.interfaces.dtos.StartOnboardingRequestDTO;
+import org.fireflyframework.application.onboarding.interfaces.dtos.CompleteOnboardingRequestDTO;
+import org.fireflyframework.application.onboarding.interfaces.dtos.OnboardingResponseDTO;
+import org.fireflyframework.application.onboarding.interfaces.dtos.OnboardingStatusResponseDTO;
+import org.fireflyframework.application.service.AbstractApplicationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -636,11 +636,11 @@ public class OnboardingApplicationService extends AbstractApplicationService {
 ### 4. Domain Service Client
 
 ```java
-package com.firefly.application.onboarding.core.clients;
+package org.fireflyframework.application.onboarding.core.clients;
 
-import com.firefly.common.application.context.ApplicationExecutionContext;
-import com.firefly.domain.people.sdk.CustomerProfileDto;
-import com.firefly.domain.people.sdk.PersonalInfoDto;
+import org.fireflyframework.application.context.ApplicationExecutionContext;
+import org.fireflyframework.domain.people.sdk.CustomerProfileDto;
+import org.fireflyframework.domain.people.sdk.PersonalInfoDto;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -687,9 +687,9 @@ public class CustomerDomainClient {
 ### 5. Context Resolver
 
 ```java
-package com.firefly.application.onboarding.core.resolvers;
+package org.fireflyframework.application.onboarding.core.resolvers;
 
-import com.firefly.common.application.resolver.AbstractContextResolver;
+import org.fireflyframework.application.resolver.AbstractContextResolver;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
@@ -747,9 +747,9 @@ public class OnboardingContextResolver extends AbstractContextResolver {
 ### 6. Security Configuration (Using AbstractSecurityConfiguration)
 
 ```java
-package com.firefly.application.onboarding.core.security;
+package org.fireflyframework.application.onboarding.core.security;
 
-import com.firefly.common.application.security.AbstractSecurityConfiguration;
+import org.fireflyframework.application.security.AbstractSecurityConfiguration;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 
@@ -804,7 +804,7 @@ public class OnboardingSecurityConfiguration extends AbstractSecurityConfigurati
 
 ### Module: `-web` 
 
-#### Package: `com.firefly.application.{service}.web.controllers`
+#### Package: `org.fireflyframework.application.{service}.web.controllers`
 **Purpose**: REST API endpoints exposed to channels
 
 **Contains**:
@@ -815,7 +815,7 @@ public class OnboardingSecurityConfiguration extends AbstractSecurityConfigurati
 
 **Example**:
 ```java path=null start=null
-package com.firefly.application.onboarding.web.controllers;
+package org.fireflyframework.application.onboarding.web.controllers;
 
 @RestController
 @RequestMapping("/api/v1/contracts/{contractId}/onboarding")
@@ -839,7 +839,7 @@ public class OnboardingController extends AbstractContractController {
 
 ### Module: `-core`
 
-#### Package: `com.firefly.application.{service}.core.services`
+#### Package: `org.fireflyframework.application.{service}.core.services`
 **Purpose**: Business process orchestration
 
 **Contains**:
@@ -851,7 +851,7 @@ public class OnboardingController extends AbstractContractController {
 
 **Example**:
 ```java path=null start=null
-package com.firefly.application.onboarding.core.services;
+package org.fireflyframework.application.onboarding.core.services;
 
 @Service
 public class OnboardingApplicationService extends AbstractApplicationService {
@@ -872,7 +872,7 @@ public class OnboardingApplicationService extends AbstractApplicationService {
 
 ---
 
-#### Package: `com.firefly.application.{service}.core.clients`
+#### Package: `org.fireflyframework.application.{service}.core.clients`
 **Purpose**: Clients for calling domain services
 
 **Contains**:
@@ -882,7 +882,7 @@ public class OnboardingApplicationService extends AbstractApplicationService {
 
 **Example**:
 ```java path=null start=null
-package com.firefly.application.onboarding.core.clients;
+package org.fireflyframework.application.onboarding.core.clients;
 
 @Component
 public class CustomerDomainClient {
@@ -906,7 +906,7 @@ public class CustomerDomainClient {
 
 ---
 
-#### Package: `com.firefly.application.{service}.core.resolvers`
+#### Package: `org.fireflyframework.application.{service}.core.resolvers`
 **Purpose**: Extract context and configuration from requests
 
 **Contains**:
@@ -915,7 +915,7 @@ public class CustomerDomainClient {
 
 **Example**:
 ```java path=null start=null
-package com.firefly.application.onboarding.core.resolvers;
+package org.fireflyframework.application.onboarding.core.resolvers;
 
 @Component
 public class OnboardingContextResolver extends AbstractContextResolver {
@@ -934,7 +934,7 @@ public class OnboardingContextResolver extends AbstractContextResolver {
 
 ---
 
-#### Package: `com.firefly.application.{service}.core.security`
+#### Package: `org.fireflyframework.application.{service}.core.security`
 **Purpose**: Security configuration and authorization
 
 **Contains**:
@@ -943,7 +943,7 @@ public class OnboardingContextResolver extends AbstractContextResolver {
 
 **Example**:
 ```java
-package com.firefly.application.onboarding.core.security;
+package org.fireflyframework.application.onboarding.core.security;
 
 @Configuration
 public class OnboardingSecurityConfiguration extends AbstractSecurityConfiguration {
@@ -960,14 +960,14 @@ public class OnboardingSecurityConfiguration extends AbstractSecurityConfigurati
 
 ---
 
-#### Package: `com.firefly.application.{service}.core.exceptions`
+#### Package: `org.fireflyframework.application.{service}.core.exceptions`
 **Purpose**: Custom exceptions for the application
 
 **Contains**: Domain-specific exception classes
 
 **Example**:
 ```java path=null start=null
-package com.firefly.application.onboarding.core.exceptions;
+package org.fireflyframework.application.onboarding.core.exceptions;
 
 public class KycVerificationFailedException extends RuntimeException {
     public KycVerificationFailedException(String message) {
@@ -980,7 +980,7 @@ public class KycVerificationFailedException extends RuntimeException {
 
 ### Module: `-interfaces`
 
-#### Package: `com.firefly.application.{service}.interfaces.dtos`
+#### Package: `org.fireflyframework.application.{service}.interfaces.dtos`
 **Purpose**: Data Transfer Objects
 
 **Structure**:
@@ -988,7 +988,7 @@ public class KycVerificationFailedException extends RuntimeException {
 
 **Example**:
 ```java path=null start=null
-package com.firefly.application.onboarding.interfaces.dtos;
+package org.fireflyframework.application.onboarding.interfaces.dtos;
 
 @Data
 public class StartOnboardingRequestDTO {
@@ -1005,12 +1005,12 @@ public class StartOnboardingRequestDTO {
 
 ---
 
-#### Package: `com.firefly.application.{service}.interfaces.enums`
+#### Package: `org.fireflyframework.application.{service}.interfaces.enums`
 **Purpose**: Enumerations
 
 **Example**:
 ```java
-package com.firefly.application.onboarding.interfaces.enums;
+package org.fireflyframework.application.onboarding.interfaces.enums;
 
 public enum OnboardingStatus {
     PENDING,
@@ -1025,7 +1025,7 @@ public enum OnboardingStatus {
 
 ### Module: `-sdk`
 
-#### Package: `com.firefly.application.{service}.sdk`
+#### Package: `org.fireflyframework.application.{service}.sdk`
 **Purpose**: Client SDK for other services
 
 **Contains**:
@@ -1035,7 +1035,7 @@ public enum OnboardingStatus {
 
 **Example**:
 ```java
-package com.firefly.application.onboarding.sdk;
+package org.fireflyframework.application.onboarding.sdk;
 
 public class OnboardingApiClient {
     
