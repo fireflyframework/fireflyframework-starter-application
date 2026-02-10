@@ -6,7 +6,7 @@ _/ ____\__|______   _____/ ____\  | ___.__.
  |  |  |  ||  | \/\  ___/|  |  |  |_\___  |
  |__|  |__||__|    \___  >__|  |____/ ____|
                        \/           \/
-${AnsiColor.RED}${AnsiStyle.BOLD}:: firefly-application ::           (v2025-08)${AnsiColor.DEFAULT}${AnsiStyle.NORMAL}
+${AnsiColor.RED}${AnsiStyle.BOLD}:: firefly-application ::           (v${spring.application.version:unknown})${AnsiColor.DEFAULT}${AnsiStyle.NORMAL}
 
 ${AnsiColor.GREEN}${AnsiStyle.BOLD}(c)2025 Firefly Software Solutions Inc${AnsiColor.DEFAULT}${AnsiStyle.NORMAL}
 ${AnsiColor.GREEN}${AnsiStyle.BOLD}Licensed under Apache 2.0${AnsiColor.DEFAULT}${AnsiStyle.NORMAL}
