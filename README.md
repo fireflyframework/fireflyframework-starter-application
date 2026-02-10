@@ -1,4 +1,6 @@
 # Firefly Common Application Library
+    
+[![CI](https://github.com/fireflyframework/fireflyframework-application/actions/workflows/ci.yml/badge.svg)](https://github.com/fireflyframework/fireflyframework-application/actions/workflows/ci.yml)
 A comprehensive Spring Boot library for building Application Layer microservices
 Business process orchestration • Multi-domain coordination • Context management • Security & Authorization
 
