@@ -7,12 +7,12 @@
     <parent>
         <groupId>org.fireflyframework</groupId>
         <artifactId>fireflyframework-parent</artifactId>
-        <version>26.02.02</version>
+        <version>26.02.03</version>
         <relativePath/>
     </parent>
 
     <artifactId>fireflyframework-application</artifactId>
-    <version>26.02.02</version>
+    <version>26.02.03</version>
     <packaging>jar</packaging>
 
     <name>Firefly Framework - Common Application Library</name>

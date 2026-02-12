@@ -58,7 +58,7 @@ The module also includes abstract controllers for standardized REST endpoints, c
 <dependency>
     <groupId>org.fireflyframework</groupId>
     <artifactId>fireflyframework-application</artifactId>
-    <version>26.02.02</version>
+    <version>26.02.03</version>
 </dependency>
 ```
 
