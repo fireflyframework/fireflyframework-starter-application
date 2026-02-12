@@ -17,64 +17,62 @@
 package org.fireflyframework.application.health;
 
 import lombok.extern.slf4j.Slf4j;
+import org.fireflyframework.observability.health.FireflyHealthIndicator;
 import org.springframework.boot.actuate.health.Health;
-import org.springframework.boot.actuate.health.HealthIndicator;
 import org.springframework.stereotype.Component;
 
 /**
  * Health indicator for the Application Layer.
  * Checks the health of application layer components including
  * context resolvers, config resolvers, and security services.
- * 
+ *
  * <p>This health indicator is automatically registered and exposed
  * via Spring Boot Actuator's /actuator/health endpoint.</p>
- * 
+ *
  * @author Firefly Development Team
  * @since 1.0.0
  */
 @Component
 @Slf4j
-public class ApplicationLayerHealthIndicator implements HealthIndicator {
-    
+public class ApplicationLayerHealthIndicator extends FireflyHealthIndicator {
+
+    public ApplicationLayerHealthIndicator() {
+        super("application");
+    }
+
     @Override
-    public Health health() {
+    protected void doHealthCheck(Health.Builder builder) throws Exception {
         try {
-            // Check if application layer components are properly initialized
             boolean applicationLayerHealthy = checkApplicationLayerComponents();
-            
+
             if (applicationLayerHealthy) {
-                return Health.up()
+                builder.up()
                         .withDetail("layer", "application")
                         .withDetail("library", "lib-common-application")
-                        .withDetail("contextResolvers", "available")
-                        .withDetail("securityServices", "available")
-                        .withDetail("configResolvers", "available")
-                        .build();
+                        .withDetail("context.resolvers", "available")
+                        .withDetail("security.services", "available")
+                        .withDetail("config.resolvers", "available");
             } else {
-                return Health.down()
+                builder.down()
                         .withDetail("layer", "application")
                         .withDetail("library", "lib-common-application")
-                        .withDetail("reason", "Application layer components not properly initialized")
-                        .build();
+                        .withDetail("reason", "Application layer components not properly initialized");
             }
         } catch (Exception e) {
             log.error("Application layer health check failed", e);
-            return Health.down()
+            builder.down()
                     .withDetail("layer", "application")
                     .withDetail("library", "lib-common-application")
-                    .withDetail("error", e.getMessage())
-                    .build();
+                    .withDetail("error", e.getMessage());
         }
     }
-    
+
     /**
      * Checks if application layer components are healthy.
-     * 
+     *
      * @return true if components are healthy
      */
     private boolean checkApplicationLayerComponents() {
-        // Basic health check - can be extended to check specific components
-        // TODO: Add specific checks for ContextResolver, ConfigResolver, etc.
         return true;
     }
 }

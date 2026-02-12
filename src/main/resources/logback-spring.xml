@@ -1,63 +1,24 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
     <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
-    
-    <!-- Console Appender with JSON format -->
-    <appender name="CONSOLE_JSON" class="ch.qos.logback.core.ConsoleAppender">
-        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
-            <providers>
-                <timestamp/>
-                <version/>
-                <message/>
-                <loggerName/>
-                <threadName/>
-                <logLevel/>
-                <logLevelValue/>
-                <stackTrace/>
-                <callerData/>
-                <context/>
-                <mdc/>
-                <tags/>
-                <logstashMarkers/>
-                <arguments/>
-                <pattern>
-                    <pattern>
-                        {
-                            "service": "${spring.application.name:-application}",
-                            "layer": "application",
-                            "library": "lib-common-application"
-                        }
-                    </pattern>
-                </pattern>
-            </providers>
-        </encoder>
-    </appender>
-    
-    <!-- Console Appender with plain text format for local development -->
-    <appender name="CONSOLE_PLAIN" class="ch.qos.logback.core.ConsoleAppender">
-        <encoder>
-            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %highlight(%-5level) [%thread] %cyan(%logger{36}) - %msg %X{requestId} %X{partyId} %X{tenantId}%n</pattern>
-        </encoder>
-    </appender>
-    
-    <!-- Application Layer specific logger -->
-    <logger name="org.fireflyframework.application" level="INFO" additivity="false">
-        <appender-ref ref="${CONSOLE_APPENDER:-CONSOLE_PLAIN}"/>
-    </logger>
-    
-    <!-- Root logger -->
+
+    <!-- Shared Firefly observability logging configuration -->
+    <include resource="logback-firefly.xml"/>
+
+    <!-- Root Logger - uses shared FIREFLY_ASYNC appender from logback-firefly.xml -->
     <root level="INFO">
-        <appender-ref ref="${CONSOLE_APPENDER:-CONSOLE_PLAIN}"/>
+        <appender-ref ref="FIREFLY_ASYNC"/>
     </root>
-    
+
+    <!-- Application Loggers -->
+    <logger name="org.fireflyframework.application" level="DEBUG"/>
+
     <!-- Profile-specific configurations -->
     <springProfile name="dev,local">
-        <property name="CONSOLE_APPENDER" value="CONSOLE_PLAIN"/>
         <logger name="org.fireflyframework.application" level="DEBUG"/>
     </springProfile>
-    
+
     <springProfile name="prod,production">
-        <property name="CONSOLE_APPENDER" value="CONSOLE_JSON"/>
         <logger name="org.fireflyframework.application" level="INFO"/>
     </springProfile>
 </configuration>

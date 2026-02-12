@@ -56,22 +56,11 @@
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
 
-        <!-- Micrometer Tracing for distributed tracing -->
+        <!-- Observability (metrics, tracing, health, structured logging) -->
         <dependency>
-            <groupId>io.micrometer</groupId>
-            <artifactId>micrometer-tracing</artifactId>
-        </dependency>
-
-        <!-- Logback JSON Encoder -->
-        <dependency>
-            <groupId>net.logstash.logback</groupId>
-            <artifactId>logstash-logback-encoder</artifactId>
-        </dependency>
-        
-        <!-- Janino for logback conditional expressions -->
-        <dependency>
-            <groupId>org.codehaus.janino</groupId>
-            <artifactId>janino</artifactId>
+            <groupId>org.fireflyframework</groupId>
+            <artifactId>fireflyframework-observability</artifactId>
+            <version>${project.version}</version>
         </dependency>
 
         <!-- Lombok for reducing boilerplate code -->
