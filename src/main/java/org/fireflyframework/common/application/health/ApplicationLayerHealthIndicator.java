@@ -49,9 +49,9 @@ public class ApplicationLayerHealthIndicator extends FireflyHealthIndicator {
                 builder.up()
                         .withDetail("layer", "application")
                         .withDetail("library", "lib-common-application")
-                        .withDetail("context.resolvers", "available")
-                        .withDetail("security.services", "available")
-                        .withDetail("config.resolvers", "available");
+                        .withDetail("contextResolvers", "available")
+                        .withDetail("securityServices", "available")
+                        .withDetail("configResolvers", "available");
             } else {
                 builder.down()
                         .withDetail("layer", "application")
