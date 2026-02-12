@@ -18,7 +18,6 @@ package org.fireflyframework.application.resolver;
 
 import org.fireflyframework.application.context.AppConfig;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
 import java.util.UUID;
@@ -49,7 +48,6 @@ import java.util.UUID;
  * @author Firefly Development Team
  * @since 1.0.0
  */
-@Component
 @Slf4j
 public class DefaultConfigResolver extends AbstractConfigResolver {
     
