@@ -22,8 +22,6 @@ import org.fireflyframework.observability.metrics.FireflyMetricsSupport;
 import io.micrometer.core.instrument.MeterRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
-import org.springframework.stereotype.Component;
 
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -47,8 +45,6 @@ import java.util.concurrent.atomic.AtomicInteger;
  * @since 1.0.0
  */
 @Slf4j
-@Component
-@ConditionalOnClass(MeterRegistry.class)
 public class PluginMetricsService extends FireflyMetricsSupport {
 
     private final PluginProperties properties;

@@ -19,7 +19,6 @@ package org.fireflyframework.application.actuator;
 import org.fireflyframework.application.context.AppMetadata;
 import org.springframework.boot.actuate.info.Info;
 import org.springframework.boot.actuate.info.InfoContributor;
-import org.springframework.stereotype.Component;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -66,7 +65,6 @@ import java.util.Map;
  * @since 1.0.0
  * @see AppMetadata
  */
-@Component
 public class FireflyApplicationInfoContributor implements InfoContributor {
     
     private final AppMetadata appMetadata;

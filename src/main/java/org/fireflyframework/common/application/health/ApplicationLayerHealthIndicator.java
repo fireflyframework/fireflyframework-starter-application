@@ -19,7 +19,6 @@ package org.fireflyframework.application.health;
 import lombok.extern.slf4j.Slf4j;
 import org.fireflyframework.observability.health.FireflyHealthIndicator;
 import org.springframework.boot.actuate.health.Health;
-import org.springframework.stereotype.Component;
 
 /**
  * Health indicator for the Application Layer.
@@ -32,7 +31,6 @@ import org.springframework.stereotype.Component;
  * @author Firefly Development Team
  * @since 1.0.0
  */
-@Component
 @Slf4j
 public class ApplicationLayerHealthIndicator extends FireflyHealthIndicator {
 

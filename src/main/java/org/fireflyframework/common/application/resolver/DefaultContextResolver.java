@@ -23,7 +23,6 @@ import org.fireflyframework.common.application.spi.SessionManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
@@ -107,7 +106,6 @@ import java.util.UUID;
  * @author Firefly Development Team
  * @since 1.0.0
  */
-@Component
 @Slf4j
 @RequiredArgsConstructor
 public class DefaultContextResolver extends AbstractContextResolver {

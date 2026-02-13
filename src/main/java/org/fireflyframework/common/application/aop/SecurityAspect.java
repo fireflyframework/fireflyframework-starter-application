@@ -29,7 +29,6 @@ import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.reflect.MethodSignature;
 import org.springframework.security.access.AccessDeniedException;
-import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
 import java.lang.reflect.Method;
@@ -48,7 +47,6 @@ import java.util.Set;
  * @since 1.0.0
  */
 @Aspect
-@Component
 @RequiredArgsConstructor
 @Slf4j
 public class SecurityAspect {
