@@ -30,6 +30,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 
 /**
  * Auto-configuration that scans beans annotated with {@link DomainPassthrough}
@@ -43,6 +44,7 @@ public class DomainPassthroughAutoConfiguration {
     @Autowired
     private ApplicationContext context;
 
+    @ConditionalOnMissingBean
     @Bean
     public RouteLocator domainPassthroughRoutes(RouteLocatorBuilder builder) {
         var routes = builder.routes();

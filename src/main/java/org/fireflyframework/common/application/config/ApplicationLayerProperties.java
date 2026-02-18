@@ -18,6 +18,7 @@ package org.fireflyframework.common.application.config;
 
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.validation.annotation.Validated;
 
 /**
  * Configuration properties for the Application Layer.
@@ -38,6 +39,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @since 1.0.0
  */
 @Data
+@Validated
 @ConfigurationProperties(prefix = "firefly.application")
 public class ApplicationLayerProperties {
     

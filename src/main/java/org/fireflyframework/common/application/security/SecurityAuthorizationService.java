@@ -18,6 +18,7 @@ package org.fireflyframework.common.application.security;
 
 import org.fireflyframework.common.application.context.AppContext;
 import org.fireflyframework.common.application.context.AppSecurityContext;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.util.Set;
@@ -78,8 +79,9 @@ public interface SecurityAuthorizationService {
         if (permissions == null || permissions.isEmpty()) {
             return Mono.just(true);
         }
-        return Mono.fromSupplier(() -> permissions.stream()
-                .allMatch(p -> hasPermission(context, p).block()));
+        return Flux.fromIterable(permissions)
+                .flatMap(p -> hasPermission(context, p))
+                .all(Boolean::booleanValue);
     }
     
     /**
@@ -93,7 +95,8 @@ public interface SecurityAuthorizationService {
         if (roles == null || roles.isEmpty()) {
             return Mono.just(true);
         }
-        return Mono.fromSupplier(() -> roles.stream()
-                .anyMatch(r -> hasRole(context, r).block()));
+        return Flux.fromIterable(roles)
+                .flatMap(r -> hasRole(context, r))
+                .any(Boolean::booleanValue);
     }
 }

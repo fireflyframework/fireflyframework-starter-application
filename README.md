@@ -1,11 +1,11 @@
-# Firefly Framework - Application
+# Firefly Framework - Starter Application
 
-[![CI](https://github.com/fireflyframework/fireflyframework-application/actions/workflows/ci.yml/badge.svg)](https://github.com/fireflyframework/fireflyframework-application/actions/workflows/ci.yml)
+[![CI](https://github.com/fireflyframework/fireflyframework-starter-application/actions/workflows/ci.yml/badge.svg)](https://github.com/fireflyframework/fireflyframework-starter-application/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Java](https://img.shields.io/badge/Java-21%2B-orange.svg)](https://openjdk.org)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.x-green.svg)](https://spring.io/projects/spring-boot)
 
-> Application layer library with context management, security authorization, plugin architecture, and process orchestration.
+> Opinionated starter for application-layer microservices providing business process orchestration, context management, security, authorization, plugin system, and session management.
 
 ---
 
@@ -23,11 +23,13 @@
 
 ## Overview
 
-Firefly Framework Application provides the application layer architecture for business process-oriented microservices. It supplies context management (application config, security context, session context), security authorization with annotation-driven endpoint protection, and a plugin system for extensible process execution.
+Firefly Framework Starter Application is an **opinionated starter for application-layer microservices** that orchestrate business processes across domain services. It provides a complete foundation for building application-tier microservices with enterprise-grade context management, security authorization, plugin architecture, and session handling.
+
+This starter supplies context management (application config, security context, session context), security authorization with annotation-driven endpoint protection, and a plugin system for extensible process execution. It's designed for the **application tier** in a multi-tier architecture — the orchestration layer that coordinates domain services and implements business workflows.
 
 The plugin architecture supports multiple plugin loaders (Spring Bean, JAR, remote repository), process mapping resolution, and a process plugin registry. The `@FireflyProcess` annotation enables declarative process definitions that can be discovered, validated, and executed at runtime with full metrics and health monitoring.
 
-The module also includes abstract controllers for standardized REST endpoints, configuration caching, domain passthrough for cross-service data propagation, and SPI-based session management.
+The starter also includes abstract controllers for standardized REST endpoints, configuration caching, domain passthrough for cross-service data propagation, and SPI-based session management.
 
 ## Features
 
@@ -57,7 +59,7 @@ The module also includes abstract controllers for standardized REST endpoints, c
 ```xml
 <dependency>
     <groupId>org.fireflyframework</groupId>
-    <artifactId>fireflyframework-application</artifactId>
+    <artifactId>fireflyframework-starter-application</artifactId>
     <version>26.02.04</version>
 </dependency>
 ```

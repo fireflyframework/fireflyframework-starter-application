@@ -80,6 +80,7 @@ public class ProcessMappingResolverAutoConfiguration {
      * <p>This overrides the default ProcessMappingService from PluginAutoConfiguration
      * when config-mgmt integration is available.</p>
      */
+    @ConditionalOnMissingBean
     @Bean
     @ConditionalOnProperty(name = "firefly.config-mgmt.enabled", havingValue = "true", matchIfMissing = true)
     public ProcessMappingService cachingProcessMappingService(

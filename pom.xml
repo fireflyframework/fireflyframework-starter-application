@@ -7,16 +7,16 @@
     <parent>
         <groupId>org.fireflyframework</groupId>
         <artifactId>fireflyframework-parent</artifactId>
-        <version>26.02.04</version>
+        <version>26.02.05</version>
         <relativePath/>
     </parent>
 
-    <artifactId>fireflyframework-application</artifactId>
-    <version>26.02.04</version>
+    <artifactId>fireflyframework-starter-application</artifactId>
+    <version>26.02.05</version>
     <packaging>jar</packaging>
 
-    <name>Firefly Framework - Common Application Library</name>
-    <description>A powerful Spring Boot library that enables application layer architecture for business process-oriented microservices with context management, security, and authorization support.</description>
+    <name>Firefly Framework - Starter Application</name>
+    <description>Starter for application-layer microservices. Enables business process orchestration with context management, security, authorization, and plugin support.</description>
 
     <dependencies>
         <!-- Spring Boot WebFlux -->

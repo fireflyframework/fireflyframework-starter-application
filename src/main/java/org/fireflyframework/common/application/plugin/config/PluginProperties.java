@@ -18,6 +18,7 @@ package org.fireflyframework.common.application.plugin.config;
 
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.validation.annotation.Validated;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -65,6 +66,7 @@ import java.util.Set;
  * @since 1.0.0
  */
 @Data
+@Validated
 @ConfigurationProperties(prefix = "firefly.application.plugin")
 public class PluginProperties {
     

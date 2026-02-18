@@ -119,6 +119,7 @@ public class ApplicationLayerAutoConfiguration {
      *
      * @return ApplicationLayerBannerConfig instance
      */
+    @ConditionalOnMissingBean
     @Bean
     @ConditionalOnProperty(name = "firefly.application.banner.enabled", matchIfMissing = true)
     public ApplicationLayerBannerConfig applicationLayerBannerConfig() {

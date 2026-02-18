@@ -97,8 +97,8 @@ public class SecurityAspect {
             return joinPoint.proceed();
         }
 
-        // Perform authorization
-        return authorizationService.authorize(executionContext.getContext(), securityContext)
+        // Build the reactive authorization chain
+        Mono<?> authorizationChain = authorizationService.authorize(executionContext.getContext(), securityContext)
                 .flatMap(authorizedContext -> {
                     if (!authorizedContext.isAuthorized()) {
                         if (!properties.getSecurity().isEnforce()) {
@@ -118,18 +118,27 @@ public class SecurityAspect {
                             ));
                         }
                     }
-                    
+
                     try {
                         Object result = joinPoint.proceed();
                         if (result instanceof Mono) {
                             return (Mono<?>) result;
                         }
-                        return Mono.just(result);
+                        return Mono.justOrEmpty(result);
                     } catch (Throwable e) {
                         return Mono.error(e);
                     }
-                })
-                .block(); // Note: In reactive applications, you might want to handle this differently
+                });
+
+        // Determine return type: if the intercepted method returns Mono, return the chain directly.
+        // Otherwise, block on a bounded-elastic scheduler to avoid deadlocking Netty event loops.
+        MethodSignature sig = (MethodSignature) joinPoint.getSignature();
+        if (Mono.class.isAssignableFrom(sig.getReturnType())) {
+            return authorizationChain;
+        }
+        return authorizationChain
+                .subscribeOn(reactor.core.scheduler.Schedulers.boundedElastic())
+                .block();
     }
     
     /**
