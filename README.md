@@ -60,7 +60,7 @@ The starter also includes abstract controllers for standardized REST endpoints, 
 <dependency>
     <groupId>org.fireflyframework</groupId>
     <artifactId>fireflyframework-starter-application</artifactId>
-    <version>26.02.04</version>
+    <version>26.02.05</version>
 </dependency>
 ```
 
