@@ -118,6 +118,14 @@
             <version>${project.version}</version>
         </dependency>
 
+        <!-- Orchestration Engine (Saga, TCC, Workflow) -->
+        <dependency>
+            <groupId>org.fireflyframework</groupId>
+            <artifactId>fireflyframework-orchestration</artifactId>
+            <version>${project.version}</version>
+            <optional>true</optional>
+        </dependency>
+
         <!-- Spring Cloud Gateway for dynamic routing via annotations -->
         <dependency>
             <groupId>org.springframework.cloud</groupId>
