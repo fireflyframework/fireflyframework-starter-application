@@ -20,9 +20,6 @@ import org.fireflyframework.common.application.actuator.FireflyApplicationInfoCo
 import org.fireflyframework.common.application.aop.SecurityAspect;
 import org.fireflyframework.common.application.context.AppMetadata;
 import org.fireflyframework.common.application.health.ApplicationLayerHealthIndicator;
-import org.fireflyframework.common.application.plugin.ProcessPluginRegistry;
-import org.fireflyframework.common.application.plugin.config.PluginProperties;
-import org.fireflyframework.common.application.plugin.metrics.PluginMetricsService;
 import org.fireflyframework.common.application.resolver.ConfigResolver;
 import org.fireflyframework.common.application.resolver.ContextResolver;
 import org.fireflyframework.common.application.resolver.DefaultConfigResolver;
@@ -33,11 +30,9 @@ import org.fireflyframework.common.application.security.JwtClaimsRoleExtractor;
 import org.fireflyframework.common.application.security.SecurityAuthorizationService;
 import org.fireflyframework.common.application.spi.SessionContext;
 import org.fireflyframework.common.application.spi.SessionManager;
-import io.micrometer.core.instrument.MeterRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -210,32 +205,4 @@ public class ApplicationLayerAutoConfiguration {
         return new FireflyApplicationInfoContributor(appMetadata);
     }
 
-    /**
-     * Creates the process plugin registry bean.
-     *
-     * @return ProcessPluginRegistry instance
-     */
-    @Bean
-    @ConditionalOnMissingBean
-    public ProcessPluginRegistry processPluginRegistry() {
-        log.info("Creating ProcessPluginRegistry bean");
-        return new ProcessPluginRegistry();
-    }
-
-    /**
-     * Creates the plugin metrics service bean.
-     * Only created when Micrometer's {@link MeterRegistry} is on the classpath.
-     *
-     * @param meterRegistry the meter registry
-     * @param pluginProperties the plugin properties
-     * @return PluginMetricsService instance
-     */
-    @Bean
-    @ConditionalOnMissingBean
-    @ConditionalOnClass(MeterRegistry.class)
-    public PluginMetricsService pluginMetricsService(MeterRegistry meterRegistry,
-                                                     PluginProperties pluginProperties) {
-        log.info("Creating PluginMetricsService bean");
-        return new PluginMetricsService(meterRegistry, pluginProperties);
-    }
 }

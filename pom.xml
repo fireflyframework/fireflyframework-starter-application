@@ -16,7 +16,7 @@
     <packaging>jar</packaging>
 
     <name>Firefly Framework - Starter Application</name>
-    <description>Starter for application-layer microservices. Enables business process orchestration with context management, security, authorization, and plugin support.</description>
+    <description>Starter for application-layer microservices. Enables business process orchestration with context management, security, authorization, and session management.</description>
 
     <dependencies>
         <!-- Spring Boot WebFlux -->

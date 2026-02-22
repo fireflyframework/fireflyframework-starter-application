@@ -5,7 +5,7 @@
 [![Java](https://img.shields.io/badge/Java-21%2B-orange.svg)](https://openjdk.org)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.x-green.svg)](https://spring.io/projects/spring-boot)
 
-> Opinionated starter for application-layer microservices providing business process orchestration, context management, security, authorization, plugin system, and session management.
+> Opinionated starter for application-layer microservices providing business process orchestration, context management, security, authorization, and session management.
 
 ---
 
@@ -23,11 +23,9 @@
 
 ## Overview
 
-Firefly Framework Starter Application is an **opinionated starter for application-layer microservices** that orchestrate business processes across domain services. It provides a complete foundation for building application-tier microservices with enterprise-grade context management, security authorization, plugin architecture, and session handling.
+Firefly Framework Starter Application is an **opinionated starter for application-layer microservices** that orchestrate business processes across domain services. It provides a complete foundation for building application-tier microservices with enterprise-grade context management, security authorization, and session handling.
 
-This starter supplies context management (application config, security context, session context), security authorization with annotation-driven endpoint protection, and a plugin system for extensible process execution. It's designed for the **application tier** in a multi-tier architecture — the orchestration layer that coordinates domain services and implements business workflows.
-
-The plugin architecture supports multiple plugin loaders (Spring Bean, JAR, remote repository), process mapping resolution, and a process plugin registry. The `@FireflyProcess` annotation enables declarative process definitions that can be discovered, validated, and executed at runtime with full metrics and health monitoring.
+This starter supplies context management (application config, security context, session context) and security authorization with annotation-driven endpoint protection. It's designed for the **application tier** in a multi-tier architecture — the orchestration layer that coordinates domain services and implements business workflows.
 
 The starter also includes abstract controllers for standardized REST endpoints, configuration caching, domain passthrough for cross-service data propagation, and SPI-based session management.
 
@@ -36,17 +34,14 @@ The starter also includes abstract controllers for standardized REST endpoints, 
 - `AppContext` and `AppSecurityContext` for application-wide context management
 - `@Secure` and `@RequireContext` annotations for declarative endpoint security
 - `SecurityAuthorizationService` with configurable endpoint security registry
-- Plugin system with `ProcessPlugin`, `ProcessPluginRegistry`, and `@FireflyProcess`
-- Plugin loaders: Spring Bean, JAR file, remote Maven repository
-- Process mapping resolution with caching support
 - Abstract controllers: `AbstractApplicationController`, `AbstractResourceController`
 - Configuration caching auto-configuration
 - Domain passthrough for cross-service data propagation
 - Session management SPI with `SessionManager` and `SessionContext`
 - Application metadata with `@FireflyApplication` annotation
-- Plugin event publishing and metrics collection
-- Health indicators for application layer and plugins
+- Health indicators for application layer
 - Actuator info contributor for Firefly application metadata
+- Orchestration engine support (Saga, TCC, Workflow) via optional dependency
 
 ## Requirements
 
@@ -89,12 +84,6 @@ firefly:
   application:
     security:
       enabled: true
-    plugin:
-      enabled: true
-      loaders:
-        - type: spring-bean
-        - type: jar
-          path: /plugins
     config-cache:
       enabled: true
       ttl: 5m
@@ -111,8 +100,6 @@ Additional documentation is available in the [docs/](docs/) directory:
 - [Security Guide](docs/SECURITY_GUIDE.md)
 - [Security Center Integration](docs/SECURITY_CENTER_INTEGRATION.md)
 - [Api Reference](docs/API_REFERENCE.md)
-- [Plugin Development Guide](docs/PLUGIN_DEVELOPMENT_GUIDE.md)
-- [Plugin Loaders](docs/PLUGIN_LOADERS.md)
 - [Cache Architecture](docs/CACHE_ARCHITECTURE.md)
 - [Example Microservice Architecture](docs/EXAMPLE_MICROSERVICE_ARCHITECTURE.md)
 - [Testing](docs/TESTING.md)
