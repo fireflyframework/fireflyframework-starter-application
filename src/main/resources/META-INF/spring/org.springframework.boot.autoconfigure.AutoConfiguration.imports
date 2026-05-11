@@ -1,4 +1,5 @@
 org.fireflyframework.common.application.config.ApplicationLayerAutoConfiguration
 org.fireflyframework.common.application.config.ConfigCacheAutoConfiguration
 org.fireflyframework.common.application.config.DomainPassthroughAutoConfiguration
+org.fireflyframework.common.application.config.WebFluxJacksonCodecAutoConfiguration
 org.fireflyframework.common.application.metadata.ApplicationMetadataProvider
