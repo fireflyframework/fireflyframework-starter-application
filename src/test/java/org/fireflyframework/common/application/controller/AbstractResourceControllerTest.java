@@ -1,3 +1,19 @@
+/*
+ * Copyright 2024-2026 Firefly Software Foundation
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.fireflyframework.common.application.controller;
 
 import org.fireflyframework.common.application.context.AppConfig;
@@ -25,164 +41,114 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/**
+ * Unit tests for {@link AbstractResourceController}.
+ *
+ * <p>The resource controller is a thin, product-agnostic base: it resolves the
+ * {@link AppContext} (subject, tenant, roles, permissions) from the {@link ContextResolver}
+ * and provides generic operation logging. It carries no contract/product scoping.</p>
+ */
 @DisplayName("AbstractResourceController Tests")
 @ExtendWith(MockitoExtension.class)
 class AbstractResourceControllerTest {
-    
+
     @Mock
     private ContextResolver contextResolver;
-    
+
     @Mock
     private ConfigResolver configResolver;
-    
+
     @Mock
     private ServerWebExchange exchange;
-    
+
     private TestResourceController controller;
-    
-    private UUID testPartyId;
+
+    private String testSubject;
     private UUID testTenantId;
-    private UUID testContractId;
-    private UUID testProductId;
-    
+
     @BeforeEach
     void setUp() {
         controller = new TestResourceController();
         ReflectionTestUtils.setField(controller, "contextResolver", contextResolver);
         ReflectionTestUtils.setField(controller, "configResolver", configResolver);
-        
-        testPartyId = UUID.randomUUID();
+
+        testSubject = "user-" + UUID.randomUUID();
         testTenantId = UUID.randomUUID();
-        testContractId = UUID.randomUUID();
-        testProductId = UUID.randomUUID();
     }
-    
+
     @Test
-    @DisplayName("Should validate valid context (both IDs)")
-    void shouldValidateValidContext() {
-        UUID contractId = UUID.randomUUID();
-        UUID productId = UUID.randomUUID();
-        
-        assertDoesNotThrow(() -> controller.testRequireContext(contractId, productId));
+    @DisplayName("Should log operation with operation name")
+    void shouldLogOperation() {
+        assertDoesNotThrow(() -> controller.testLogOperation("testOperation"));
     }
-    
-    @Test
-    @DisplayName("Should throw exception for null contract ID")
-    void shouldThrowExceptionForNullContractId() {
-        IllegalArgumentException exception = assertThrows(
-            IllegalArgumentException.class,
-            () -> controller.testRequireContext(null, testProductId)
-        );
-        
-        assertTrue(exception.getMessage().contains("contractId is required"));
-    }
-    
-    @Test
-    @DisplayName("Should throw exception for null product ID")
-    void shouldThrowExceptionForNullProductId() {
-        IllegalArgumentException exception = assertThrows(
-            IllegalArgumentException.class,
-            () -> controller.testRequireContext(testContractId, null)
-        );
-        
-        assertTrue(exception.getMessage().contains("productId is required"));
-    }
-    
-    @Test
-    @DisplayName("Should log operation with resource context")
-    void shouldLogOperationWithResourceContext() {
-        UUID contractId = UUID.randomUUID();
-        UUID productId = UUID.randomUUID();
-        
-        assertDoesNotThrow(() -> controller.testLogOperation(contractId, productId, "testOperation"));
-    }
-    
+
     @Test
     @DisplayName("Should handle null operation name in logging")
     void shouldHandleNullOperationNameInLogging() {
-        UUID contractId = UUID.randomUUID();
-        UUID productId = UUID.randomUUID();
-        
-        assertDoesNotThrow(() -> controller.testLogOperation(contractId, productId, null));
+        assertDoesNotThrow(() -> controller.testLogOperation(null));
     }
-    
+
     @Test
-    @DisplayName("Should resolve resource context (contract + product)")
-    void shouldResolveResourceContext() {
+    @DisplayName("Should resolve execution context (subject + tenant + roles + permissions)")
+    void shouldResolveExecutionContext() {
         // Given
         AppContext appContext = AppContext.builder()
-                .partyId(testPartyId)
+                .subject(testSubject)
                 .tenantId(testTenantId)
-                .contractId(testContractId)
-                .productId(testProductId)
                 .roles(Set.of("transaction:viewer"))
                 .permissions(Set.of("transaction:read"))
                 .build();
-        
+
         AppConfig appConfig = AppConfig.builder()
                 .tenantId(testTenantId)
                 .tenantName("Test Tenant")
                 .build();
-        
-        when(contextResolver.resolveContext(any(ServerWebExchange.class), eq(testContractId), eq(testProductId)))
+
+        when(contextResolver.resolveContext(any(ServerWebExchange.class)))
                 .thenReturn(Mono.just(appContext));
         when(configResolver.resolveConfig(testTenantId))
                 .thenReturn(Mono.just(appConfig));
-        
+
         // When
-        Mono<ApplicationExecutionContext> result = controller.testResolveExecutionContext(
-                exchange, testContractId, testProductId);
-        
+        Mono<ApplicationExecutionContext> result = controller.testResolveExecutionContext(exchange);
+
         // Then
         StepVerifier.create(result)
                 .assertNext(ctx -> {
                     assertThat(ctx).isNotNull();
-                    assertThat(ctx.getContext().getPartyId()).isEqualTo(testPartyId);
+                    assertThat(ctx.getContext().getSubject()).isEqualTo(testSubject);
                     assertThat(ctx.getContext().getTenantId()).isEqualTo(testTenantId);
-                    assertThat(ctx.getContext().getContractId()).isEqualTo(testContractId);
-                    assertThat(ctx.getContext().getProductId()).isEqualTo(testProductId);
+                    assertThat(ctx.getContext().getRoles()).containsExactly("transaction:viewer");
+                    assertThat(ctx.getContext().getPermissions()).containsExactly("transaction:read");
                 })
                 .verifyComplete();
-        
-        verify(contextResolver).resolveContext(eq(exchange), eq(testContractId), eq(testProductId));
+
+        verify(contextResolver).resolveContext(eq(exchange));
         verify(configResolver).resolveConfig(testTenantId);
     }
-    
+
     @Test
-    @DisplayName("Should throw exception when contract ID is null in context resolution")
-    void shouldThrowExceptionWhenContractIdIsNullInContextResolution() {
-        // When & Then
-        assertThrows(IllegalArgumentException.class, () -> {
-            controller.testResolveExecutionContext(exchange, null, testProductId).block();
-        });
+    @DisplayName("Should propagate context resolution error")
+    void shouldPropagateContextResolutionError() {
+        when(contextResolver.resolveContext(any(ServerWebExchange.class)))
+                .thenReturn(Mono.error(new IllegalStateException("No authenticated principal")));
+
+        assertThrows(IllegalStateException.class,
+                () -> controller.testResolveExecutionContext(exchange).block());
     }
-    
-    @Test
-    @DisplayName("Should throw exception when product ID is null in context resolution")
-    void shouldThrowExceptionWhenProductIdIsNullInContextResolution() {
-        // When & Then
-        assertThrows(IllegalArgumentException.class, () -> {
-            controller.testResolveExecutionContext(exchange, testContractId, null).block();
-        });
-    }
-    
+
     /**
-     * Concrete test implementation of AbstractResourceController
-     * to expose protected methods for testing
+     * Concrete test implementation of {@link AbstractResourceController}
+     * to expose protected methods for testing.
      */
     static class TestResourceController extends AbstractResourceController {
-        
-        public void testRequireContext(UUID contractId, UUID productId) {
-            requireContext(contractId, productId);
+
+        public void testLogOperation(String operation) {
+            logOperation(operation);
         }
-        
-        public void testLogOperation(UUID contractId, UUID productId, String operation) {
-            logOperation(contractId, productId, operation);
-        }
-        
-        public Mono<ApplicationExecutionContext> testResolveExecutionContext(
-                ServerWebExchange exchange, UUID contractId, UUID productId) {
-            return resolveExecutionContext(exchange, contractId, productId);
+
+        public Mono<ApplicationExecutionContext> testResolveExecutionContext(ServerWebExchange exchange) {
+            return resolveExecutionContext(exchange);
         }
     }
 }

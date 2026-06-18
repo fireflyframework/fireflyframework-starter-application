@@ -17,7 +17,6 @@
 package org.fireflyframework.common.application.aop;
 
 import org.fireflyframework.common.application.config.ApplicationLayerProperties;
-import org.fireflyframework.common.application.context.AppContext;
 import org.fireflyframework.common.application.context.AppSecurityContext;
 import org.fireflyframework.common.application.context.ApplicationExecutionContext;
 import org.fireflyframework.common.application.security.EndpointSecurityRegistry;
@@ -41,10 +40,10 @@ import java.util.Set;
 /**
  * Aspect for intercepting and processing @Secure annotations.
  * Handles security checks before method execution.
- * 
+ *
  * <p>This aspect intercepts methods annotated with @Secure and performs
  * authorization checks using the SecurityAuthorizationService.</p>
- * 
+ *
  * @author Firefly Development Team
  * @since 1.0.0
  */
@@ -52,14 +51,14 @@ import java.util.Set;
 @RequiredArgsConstructor
 @Slf4j
 public class SecurityAspect {
-    
+
     private final SecurityAuthorizationService authorizationService;
     private final EndpointSecurityRegistry endpointSecurityRegistry;
     private final ApplicationLayerProperties properties;
-    
+
     /**
      * Intercepts methods annotated with @Secure.
-     * 
+     *
      * @param joinPoint the join point
      * @param secure the secure annotation
      * @return the method result
@@ -68,18 +67,18 @@ public class SecurityAspect {
     @Around("@annotation(secure)")
     public Object secureMethod(ProceedingJoinPoint joinPoint, Secure secure) throws Throwable {
         log.debug("Intercepting @Secure method: {}", joinPoint.getSignature().getName());
-        
+
         // Extract ApplicationExecutionContext from method arguments
         ApplicationExecutionContext executionContext = findExecutionContext(joinPoint.getArgs());
         if (executionContext == null) {
             log.warn("No ApplicationExecutionContext found in method arguments, skipping security check");
             return joinPoint.proceed();
         }
-        
+
         // Check EndpointSecurityRegistry first (explicit configuration overrides annotations)
         String endpoint = extractEndpoint(joinPoint);
         String httpMethod = extractHttpMethod(joinPoint);
-        
+
         AppSecurityContext securityContext = endpointSecurityRegistry
                 .getEndpointSecurity(endpoint, httpMethod)
                 .map(explicitSecurity -> {
@@ -90,7 +89,7 @@ public class SecurityAspect {
                     log.debug("Using ANNOTATION security configuration for {} {}", httpMethod, endpoint);
                     return buildSecurityContext(secure, joinPoint, endpoint, httpMethod);
                 });
-        
+
         // Check if security is disabled
         if (!properties.getSecurity().isEnabled()) {
             log.debug("Security is disabled, allowing access to {}", endpoint);
@@ -102,13 +101,13 @@ public class SecurityAspect {
                 .flatMap(authorizedContext -> {
                     if (!authorizedContext.isAuthorized()) {
                         if (!properties.getSecurity().isEnforce()) {
-                            log.warn("ACCESS WOULD BE DENIED (enforce=false) for party: {} to endpoint: {}, reason: {}",
-                                    executionContext.getPartyId(),
+                            log.warn("ACCESS WOULD BE DENIED (enforce=false) for subject: {} to endpoint: {}, reason: {}",
+                                    executionContext.getSubject(),
                                     securityContext.getEndpoint(),
                                     authorizedContext.getAuthorizationFailureReason());
                         } else {
-                            log.warn("Access denied for party: {} to endpoint: {}, reason: {}",
-                                    executionContext.getPartyId(),
+                            log.warn("Access denied for subject: {} to endpoint: {}, reason: {}",
+                                    executionContext.getSubject(),
                                     securityContext.getEndpoint(),
                                     authorizedContext.getAuthorizationFailureReason());
                             return Mono.error(new AccessDeniedException(
@@ -140,10 +139,10 @@ public class SecurityAspect {
                 .subscribeOn(reactor.core.scheduler.Schedulers.boundedElastic())
                 .block();
     }
-    
+
     /**
      * Intercepts classes annotated with @Secure.
-     * 
+     *
      * @param joinPoint the join point
      * @param secure the secure annotation
      * @return the method result
@@ -153,10 +152,10 @@ public class SecurityAspect {
     public Object secureClass(ProceedingJoinPoint joinPoint, Secure secure) throws Throwable {
         return secureMethod(joinPoint, secure);
     }
-    
+
     /**
      * Finds ApplicationExecutionContext in method arguments.
-     * 
+     *
      * @param args the method arguments
      * @return the execution context or null if not found
      */
@@ -164,19 +163,19 @@ public class SecurityAspect {
         if (args == null) {
             return null;
         }
-        
+
         for (Object arg : args) {
             if (arg instanceof ApplicationExecutionContext) {
                 return (ApplicationExecutionContext) arg;
             }
         }
-        
+
         return null;
     }
-    
+
     /**
      * Builds AppSecurityContext from @Secure annotation.
-     * 
+     *
      * @param secure the annotation
      * @param joinPoint the join point
      * @param endpoint the endpoint path
@@ -188,11 +187,9 @@ public class SecurityAspect {
         Set<String> roles = new HashSet<>(Arrays.asList(secure.roles()));
         Set<String> permissions = new HashSet<>(Arrays.asList(secure.permissions()));
 
-        // Use SECURITY_CENTER only if both the global property and annotation agree
-        boolean useSecurityCenter = properties.getSecurity().isUseSecurityCenter() && secure.useSecurityCenter();
-        AppSecurityContext.SecurityConfigSource configSource = useSecurityCenter
-                ? AppSecurityContext.SecurityConfigSource.SECURITY_CENTER
-                : AppSecurityContext.SecurityConfigSource.ANNOTATION;
+        // Authorization is driven by the annotation's declared roles/permissions evaluated against
+        // the validated principal's authorities (no external Security Center).
+        AppSecurityContext.SecurityConfigSource configSource = AppSecurityContext.SecurityConfigSource.ANNOTATION;
 
         return AppSecurityContext.builder()
                 .endpoint(endpoint)
@@ -204,7 +201,7 @@ public class SecurityAspect {
                 .configSource(configSource)
                 .build();
     }
-    
+
     /**
      * Extracts endpoint path from join point by reading Spring MVC mapping annotations.
      * Falls back to class.method signature if no mapping annotations found.

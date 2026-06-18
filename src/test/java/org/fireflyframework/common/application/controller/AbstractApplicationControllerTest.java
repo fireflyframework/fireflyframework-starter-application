@@ -37,146 +37,144 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * Unit tests for AbstractApplicationController.
- * Tests application-layer context resolution (no contract or product).
+ * Unit tests for {@link AbstractApplicationController}.
+ *
+ * <p>The controller resolves the product-agnostic {@link AppContext} (subject, tenant, roles,
+ * permissions) from the {@link ContextResolver} and combines it with the tenant {@link AppConfig}.
+ * There is no contract or product scoping at this layer.</p>
  */
 @ExtendWith(MockitoExtension.class)
 class AbstractApplicationControllerTest {
-    
+
     @Mock
     private ContextResolver contextResolver;
-    
+
     @Mock
     private ConfigResolver configResolver;
-    
+
     @Mock
     private ServerWebExchange exchange;
-    
+
     private TestApplicationController controller;
-    
-    private UUID testPartyId;
+
+    private String testSubject;
     private UUID testTenantId;
-    
+
     @BeforeEach
     void setUp() {
         controller = new TestApplicationController();
         ReflectionTestUtils.setField(controller, "contextResolver", contextResolver);
         ReflectionTestUtils.setField(controller, "configResolver", configResolver);
-        
-        testPartyId = UUID.randomUUID();
+
+        testSubject = "user-" + UUID.randomUUID();
         testTenantId = UUID.randomUUID();
     }
-    
+
     @Test
     void shouldResolveApplicationLayerContext() {
         // Given
         AppContext appContext = AppContext.builder()
-                .partyId(testPartyId)
+                .subject(testSubject)
                 .tenantId(testTenantId)
-                .contractId(null)  // No contract for application-layer
-                .productId(null)   // No product for application-layer
                 .roles(Set.of("customer:onboard"))
                 .permissions(Set.of())
                 .build();
-        
+
         AppConfig appConfig = AppConfig.builder()
                 .tenantId(testTenantId)
                 .tenantName("Test Tenant")
                 .build();
-        
-        when(contextResolver.resolveContext(any(ServerWebExchange.class), isNull(), isNull()))
+
+        when(contextResolver.resolveContext(any(ServerWebExchange.class)))
                 .thenReturn(Mono.just(appContext));
         when(configResolver.resolveConfig(testTenantId))
                 .thenReturn(Mono.just(appConfig));
-        
+
         // When
         Mono<ApplicationExecutionContext> result = controller.resolveExecutionContext(exchange);
-        
+
         // Then
         StepVerifier.create(result)
                 .assertNext(ctx -> {
                     assertThat(ctx).isNotNull();
                     assertThat(ctx.getContext()).isEqualTo(appContext);
                     assertThat(ctx.getConfig()).isEqualTo(appConfig);
-                    assertThat(ctx.getContext().getPartyId()).isEqualTo(testPartyId);
+                    assertThat(ctx.getContext().getSubject()).isEqualTo(testSubject);
                     assertThat(ctx.getContext().getTenantId()).isEqualTo(testTenantId);
-                    assertThat(ctx.getContext().getContractId()).isNull();
-                    assertThat(ctx.getContext().getProductId()).isNull();
                 })
                 .verifyComplete();
-        
-        verify(contextResolver).resolveContext(eq(exchange), isNull(), isNull());
+
+        verify(contextResolver).resolveContext(eq(exchange));
         verify(configResolver).resolveConfig(testTenantId);
     }
-    
+
     @Test
     void shouldHandleContextResolutionError() {
         // Given
-        when(contextResolver.resolveContext(any(ServerWebExchange.class), isNull(), isNull()))
-                .thenReturn(Mono.error(new IllegalStateException("X-Party-Id header not found")));
-        
+        when(contextResolver.resolveContext(any(ServerWebExchange.class)))
+                .thenReturn(Mono.error(new IllegalStateException("No authenticated principal")));
+
         // When
         Mono<ApplicationExecutionContext> result = controller.resolveExecutionContext(exchange);
-        
+
         // Then
         StepVerifier.create(result)
-                .expectErrorMatches(error -> 
+                .expectErrorMatches(error ->
                     error instanceof IllegalStateException &&
-                    error.getMessage().contains("X-Party-Id header not found"))
+                    error.getMessage().contains("No authenticated principal"))
                 .verify();
     }
-    
+
     @Test
     void shouldHandleConfigResolutionError() {
         // Given
         AppContext appContext = AppContext.builder()
-                .partyId(testPartyId)
+                .subject(testSubject)
                 .tenantId(testTenantId)
                 .build();
-        
-        when(contextResolver.resolveContext(any(ServerWebExchange.class), isNull(), isNull()))
+
+        when(contextResolver.resolveContext(any(ServerWebExchange.class)))
                 .thenReturn(Mono.just(appContext));
         when(configResolver.resolveConfig(testTenantId))
                 .thenReturn(Mono.error(new RuntimeException("Config service unavailable")));
-        
+
         // When
         Mono<ApplicationExecutionContext> result = controller.resolveExecutionContext(exchange);
-        
+
         // Then
         StepVerifier.create(result)
-                .expectErrorMatches(error -> 
+                .expectErrorMatches(error ->
                     error instanceof RuntimeException &&
                     error.getMessage().contains("Config service unavailable"))
                 .verify();
     }
-    
+
     @Test
     void shouldResolveContextWithRolesAndPermissions() {
         // Given
         AppContext appContext = AppContext.builder()
-                .partyId(testPartyId)
+                .subject(testSubject)
                 .tenantId(testTenantId)
                 .roles(Set.of("customer:onboard", "customer:viewer"))
                 .permissions(Set.of("profile:read", "profile:update"))
                 .build();
-        
+
         AppConfig appConfig = AppConfig.builder()
                 .tenantId(testTenantId)
                 .build();
-        
-        when(contextResolver.resolveContext(any(ServerWebExchange.class), isNull(), isNull()))
+
+        when(contextResolver.resolveContext(any(ServerWebExchange.class)))
                 .thenReturn(Mono.just(appContext));
         when(configResolver.resolveConfig(testTenantId))
                 .thenReturn(Mono.just(appConfig));
-        
+
         // When
         Mono<ApplicationExecutionContext> result = controller.resolveExecutionContext(exchange);
-        
+
         // Then
         StepVerifier.create(result)
                 .assertNext(ctx -> {
@@ -187,9 +185,9 @@ class AbstractApplicationControllerTest {
                 })
                 .verifyComplete();
     }
-    
+
     /**
-     * Concrete test implementation of AbstractApplicationController.
+     * Concrete test implementation of {@link AbstractApplicationController}.
      */
     private static class TestApplicationController extends AbstractApplicationController {
         // Test implementation - inherits all functionality from AbstractApplicationController

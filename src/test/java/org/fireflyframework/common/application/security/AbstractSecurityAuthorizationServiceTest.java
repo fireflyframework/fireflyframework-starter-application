@@ -30,26 +30,27 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Unit tests for {@link AbstractSecurityAuthorizationService}.
+ *
+ * <p>Authorization is evaluated solely from the {@link AppContext} roles and permissions that were
+ * already resolved for the request.</p>
  */
 @DisplayName("AbstractSecurityAuthorizationService Tests")
 class AbstractSecurityAuthorizationServiceTest {
-    
+
     private TestSecurityAuthorizationService authorizationService;
     private AppContext context;
-    
+
     @BeforeEach
     void setUp() {
         authorizationService = new TestSecurityAuthorizationService();
         context = AppContext.builder()
-                .partyId(UUID.randomUUID())
+                .subject("user-123")
                 .tenantId(UUID.randomUUID())
-                .contractId(UUID.randomUUID())
-                .productId(UUID.randomUUID())
                 .roles(Set.of("ROLE_USER", "ROLE_ADMIN"))
                 .permissions(Set.of("READ", "WRITE"))
                 .build();
     }
-    
+
     @Test
     @DisplayName("Should authorize anonymous access when allowed")
     void shouldAuthorizeAnonymousAccess() {
@@ -59,7 +60,7 @@ class AbstractSecurityAuthorizationServiceTest {
                 .httpMethod("GET")
                 .allowAnonymous(true)
                 .build();
-        
+
         // When/Then
         StepVerifier.create(authorizationService.authorize(context, securityContext))
                 .assertNext(result -> {
@@ -68,7 +69,7 @@ class AbstractSecurityAuthorizationServiceTest {
                 })
                 .verifyComplete();
     }
-    
+
     @Test
     @DisplayName("Should authorize when required role is present")
     void shouldAuthorizeWhenRolePresent() {
@@ -78,7 +79,7 @@ class AbstractSecurityAuthorizationServiceTest {
                 .httpMethod("GET")
                 .requiredRoles(Set.of("ROLE_ADMIN"))
                 .build();
-        
+
         // When/Then
         StepVerifier.create(authorizationService.authorize(context, securityContext))
                 .assertNext(result -> {
@@ -87,7 +88,7 @@ class AbstractSecurityAuthorizationServiceTest {
                 })
                 .verifyComplete();
     }
-    
+
     @Test
     @DisplayName("Should deny when required role is missing")
     void shouldDenyWhenRoleMissing() {
@@ -97,7 +98,7 @@ class AbstractSecurityAuthorizationServiceTest {
                 .httpMethod("GET")
                 .requiredRoles(Set.of("ROLE_SUPERADMIN"))
                 .build();
-        
+
         // When/Then
         StepVerifier.create(authorizationService.authorize(context, securityContext))
                 .assertNext(result -> {
@@ -106,7 +107,7 @@ class AbstractSecurityAuthorizationServiceTest {
                 })
                 .verifyComplete();
     }
-    
+
     @Test
     @DisplayName("Should authorize when required permission is granted")
     void shouldAuthorizeWhenPermissionGranted() {
@@ -116,7 +117,7 @@ class AbstractSecurityAuthorizationServiceTest {
                 .httpMethod("GET")
                 .requiredPermissions(Set.of("READ"))
                 .build();
-        
+
         // When/Then
         StepVerifier.create(authorizationService.authorize(context, securityContext))
                 .assertNext(result -> {
@@ -125,7 +126,7 @@ class AbstractSecurityAuthorizationServiceTest {
                 })
                 .verifyComplete();
     }
-    
+
     @Test
     @DisplayName("Should deny when required permission is missing")
     void shouldDenyWhenPermissionMissing() {
@@ -135,7 +136,7 @@ class AbstractSecurityAuthorizationServiceTest {
                 .httpMethod("DELETE")
                 .requiredPermissions(Set.of("DELETE"))
                 .build();
-        
+
         // When/Then
         StepVerifier.create(authorizationService.authorize(context, securityContext))
                 .assertNext(result -> {
@@ -144,7 +145,7 @@ class AbstractSecurityAuthorizationServiceTest {
                 })
                 .verifyComplete();
     }
-    
+
     @Test
     @DisplayName("Should check both roles and permissions when required")
     void shouldCheckBothRolesAndPermissions() {
@@ -155,13 +156,13 @@ class AbstractSecurityAuthorizationServiceTest {
                 .requiredRoles(Set.of("ROLE_ADMIN"))
                 .requiredPermissions(Set.of("WRITE"))
                 .build();
-        
+
         // When/Then
         StepVerifier.create(authorizationService.authorize(context, securityContext))
                 .assertNext(result -> assertThat(result.isAuthorized()).isTrue())
                 .verifyComplete();
     }
-    
+
     @Test
     @DisplayName("Should deny when role is present but permission is missing")
     void shouldDenyWhenRolePresentButPermissionMissing() {
@@ -172,7 +173,7 @@ class AbstractSecurityAuthorizationServiceTest {
                 .requiredRoles(Set.of("ROLE_ADMIN"))
                 .requiredPermissions(Set.of("DELETE"))
                 .build();
-        
+
         // When/Then
         StepVerifier.create(authorizationService.authorize(context, securityContext))
                 .assertNext(result -> {
@@ -181,33 +182,33 @@ class AbstractSecurityAuthorizationServiceTest {
                 })
                 .verifyComplete();
     }
-    
+
     @Test
-    @DisplayName("Should check if party has specific role")
+    @DisplayName("Should check if subject has specific role")
     void shouldCheckHasRole() {
         // When/Then
         StepVerifier.create(authorizationService.hasRole(context, "ROLE_ADMIN"))
                 .expectNext(true)
                 .verifyComplete();
-        
+
         StepVerifier.create(authorizationService.hasRole(context, "ROLE_SUPERADMIN"))
                 .expectNext(false)
                 .verifyComplete();
     }
-    
+
     @Test
-    @DisplayName("Should check if party has specific permission")
+    @DisplayName("Should check if subject has specific permission")
     void shouldCheckHasPermission() {
         // When/Then
         StepVerifier.create(authorizationService.hasPermission(context, "READ"))
                 .expectNext(true)
                 .verifyComplete();
-        
+
         StepVerifier.create(authorizationService.hasPermission(context, "DELETE"))
                 .expectNext(false)
                 .verifyComplete();
     }
-    
+
     @Test
     @DisplayName("Should allow access when no specific requirements")
     void shouldAllowAccessWithNoRequirements() {
@@ -216,13 +217,13 @@ class AbstractSecurityAuthorizationServiceTest {
                 .endpoint("/open")
                 .httpMethod("GET")
                 .build();
-        
+
         // When/Then
         StepVerifier.create(authorizationService.authorize(context, securityContext))
                 .assertNext(result -> assertThat(result.isAuthorized()).isTrue())
                 .verifyComplete();
     }
-    
+
     @Test
     @DisplayName("Should evaluate expression and return false by default")
     void shouldEvaluateExpression() {
@@ -231,27 +232,7 @@ class AbstractSecurityAuthorizationServiceTest {
                 .expectNext(false)
                 .verifyComplete();
     }
-    
-    @Test
-    @DisplayName("Should deny with SecurityCenter when config source is SECURITY_CENTER")
-    void shouldDenyWithSecurityCenter() {
-        // Given
-        AppSecurityContext securityContext = AppSecurityContext.builder()
-                .endpoint("/protected")
-                .httpMethod("GET")
-                .configSource(AppSecurityContext.SecurityConfigSource.SECURITY_CENTER)
-                .build();
-        
-        // When/Then
-        StepVerifier.create(authorizationService.authorize(context, securityContext))
-                .assertNext(result -> {
-                    assertThat(result.isAuthorized()).isFalse();
-                    assertThat(result.getAuthorizationFailureReason())
-                            .isEqualTo("SecurityCenter integration not implemented");
-                })
-                .verifyComplete();
-    }
-    
+
     /**
      * Test implementation of AbstractSecurityAuthorizationService.
      */

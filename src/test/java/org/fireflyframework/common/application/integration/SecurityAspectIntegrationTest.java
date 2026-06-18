@@ -41,59 +41,59 @@ import static org.mockito.Mockito.when;
 
 /**
  * Integration tests for {@link SecurityAspect}.
- * Tests AOP interception of @Secure annotations.
+ * Tests AOP interception of {@code @Secure} annotations against the product-agnostic
+ * {@link AppContext} (subject, tenant, roles, permissions).
  */
 @DisplayName("SecurityAspect Integration Tests")
 class SecurityAspectIntegrationTest {
-    
+
     private SecurityAuthorizationService authorizationService;
     private EndpointSecurityRegistry endpointSecurityRegistry;
     private SecurityAspect securityAspect;
     private TestService testService;
     private TestService proxiedService;
-    
+
     @BeforeEach
     void setUp() {
         authorizationService = mock(SecurityAuthorizationService.class);
         endpointSecurityRegistry = new EndpointSecurityRegistry();
         var applicationProperties = new org.fireflyframework.common.application.config.ApplicationLayerProperties();
-        applicationProperties.getSecurity().setUseSecurityCenter(false);
         securityAspect = new SecurityAspect(authorizationService, endpointSecurityRegistry, applicationProperties);
-        
+
         testService = new TestService();
-        
+
         // Create AOP proxy
         AspectJProxyFactory factory = new AspectJProxyFactory(testService);
         factory.addAspect(securityAspect);
         proxiedService = factory.getProxy();
     }
-    
+
     @Test
     @DisplayName("Should allow access when authorization is granted")
     void shouldAllowAccessWhenAuthorized() {
         // Given
         ApplicationExecutionContext context = createExecutionContext();
-        
+
         when(authorizationService.authorize(any(AppContext.class), any(AppSecurityContext.class)))
                 .thenReturn(Mono.just(AppSecurityContext.builder()
                         .endpoint("/test")
                         .httpMethod("GET")
                         .authorized(true)
                         .build()));
-        
+
         // When
         String result = proxiedService.secureMethod(context);
-        
+
         // Then
         assertThat(result).isEqualTo("success");
     }
-    
+
     @Test
     @DisplayName("Should deny access when authorization is denied")
     void shouldDenyAccessWhenUnauthorized() {
         // Given
         ApplicationExecutionContext context = createExecutionContext();
-        
+
         when(authorizationService.authorize(any(AppContext.class), any(AppSecurityContext.class)))
                 .thenReturn(Mono.just(AppSecurityContext.builder()
                         .endpoint("/test")
@@ -101,232 +101,232 @@ class SecurityAspectIntegrationTest {
                         .authorized(false)
                         .authorizationFailureReason("Missing required role")
                         .build()));
-        
+
         // When/Then
         assertThatThrownBy(() -> proxiedService.secureMethod(context))
                 .isInstanceOf(AccessDeniedException.class)
                 .hasMessageContaining("Missing required role");
     }
-    
+
     @Test
     @DisplayName("Should intercept method with @Secure annotation")
     void shouldInterceptSecureAnnotation() {
         // Given
         ApplicationExecutionContext context = createExecutionContext();
-        
+
         when(authorizationService.authorize(any(AppContext.class), any(AppSecurityContext.class)))
                 .thenReturn(Mono.just(AppSecurityContext.builder()
                         .endpoint("/test")
                         .httpMethod("GET")
                         .authorized(true)
                         .build()));
-        
+
         // When
         String result = proxiedService.methodWithRoles(context);
-        
+
         // Then
         assertThat(result).isEqualTo("success-with-roles");
     }
-    
+
     @Test
     @DisplayName("Should check roles specified in @Secure annotation")
     void shouldCheckRolesFromAnnotation() {
         // Given
         ApplicationExecutionContext context = createExecutionContext();
-        
+
         when(authorizationService.authorize(any(AppContext.class), any(AppSecurityContext.class)))
                 .thenAnswer(invocation -> {
                     AppSecurityContext secContext = invocation.getArgument(1);
-                    
+
                     // Verify that the aspect extracted roles from annotation
                     assertThat(secContext.getRequiredRoles()).containsExactly("ADMIN");
                     assertThat(secContext.getConfigSource())
                             .isEqualTo(AppSecurityContext.SecurityConfigSource.ANNOTATION);
-                    
+
                     // Simulate authorization success since user has ADMIN role
                     return Mono.just(secContext.toBuilder()
                             .authorized(true)
                             .build());
                 });
-        
+
         // When
         String result = proxiedService.methodWithRoles(context);
-        
+
         // Then
         assertThat(result).isEqualTo("success-with-roles");
     }
-    
+
     @Test
     @DisplayName("Should check permissions specified in @Secure annotation")
     void shouldCheckPermissionsFromAnnotation() {
         // Given
         ApplicationExecutionContext context = createExecutionContext();
-        
+
         when(authorizationService.authorize(any(AppContext.class), any(AppSecurityContext.class)))
                 .thenAnswer(invocation -> {
                     AppSecurityContext secContext = invocation.getArgument(1);
-                    
+
                     // Verify that the aspect extracted permissions from annotation
                     assertThat(secContext.getRequiredPermissions()).containsExactly("WRITE");
                     assertThat(secContext.getConfigSource())
                             .isEqualTo(AppSecurityContext.SecurityConfigSource.ANNOTATION);
-                    
+
                     // Simulate authorization success since user has WRITE permission
                     return Mono.just(secContext.toBuilder()
                             .authorized(true)
                             .build());
                 });
-        
+
         // When
         String result = proxiedService.methodWithPermissions(context);
-        
+
         // Then
         assertThat(result).isEqualTo("success-with-permissions");
     }
-    
+
     @Test
     @DisplayName("Should skip security check when no execution context is provided")
     void shouldSkipSecurityCheckWithoutExecutionContext() {
         // When - Call without ExecutionContext
         String result = proxiedService.methodWithoutContext();
-        
+
         // Then - Should execute without security check
         assertThat(result).isEqualTo("no-context");
     }
-    
+
     @Test
     @DisplayName("Should check both roles and permissions from annotation")
     void shouldCheckRolesAndPermissionsFromAnnotation() {
         // Given
         ApplicationExecutionContext context = createExecutionContext();
-        
+
         when(authorizationService.authorize(any(AppContext.class), any(AppSecurityContext.class)))
                 .thenAnswer(invocation -> {
                     AppSecurityContext secContext = invocation.getArgument(1);
-                    
+
                     // Verify that the aspect extracted both roles and permissions
                     assertThat(secContext.getRequiredRoles()).containsExactly("ADMIN");
                     assertThat(secContext.getRequiredPermissions()).containsExactly("WRITE");
                     assertThat(secContext.getConfigSource())
                             .isEqualTo(AppSecurityContext.SecurityConfigSource.ANNOTATION);
-                    
+
                     // Simulate authorization success
                     return Mono.just(secContext.toBuilder()
                             .authorized(true)
                             .build());
                 });
-        
+
         // When
         String result = proxiedService.methodWithRolesAndPermissions(context);
-        
+
         // Then
         assertThat(result).isEqualTo("success-with-both");
     }
-    
+
     @Test
     @DisplayName("Should deny access when user lacks required roles")
     void shouldDenyAccessWhenUserLacksRoles() {
         // Given - Context with user that has no ADMIN role
         ApplicationExecutionContext context = ApplicationExecutionContext.builder()
                 .context(AppContext.builder()
-                        .partyId(UUID.randomUUID())
+                        .subject("user-" + UUID.randomUUID())
                         .tenantId(UUID.randomUUID())
                         .roles(Set.of("USER"))  // Only USER role, not ADMIN
                         .permissions(Set.of("READ"))
                         .build())
                 .build();
-        
+
         when(authorizationService.authorize(any(AppContext.class), any(AppSecurityContext.class)))
                 .thenAnswer(invocation -> {
                     AppSecurityContext secContext = invocation.getArgument(1);
-                    
+
                     // Simulate authorization service checking and denying
                     return Mono.just(secContext.toBuilder()
                             .authorized(false)
                             .authorizationFailureReason("User does not have required ADMIN role")
                             .build());
                 });
-        
+
         // When/Then
         assertThatThrownBy(() -> proxiedService.methodWithRoles(context))
                 .isInstanceOf(AccessDeniedException.class)
                 .hasMessageContaining("User does not have required ADMIN role");
     }
-    
+
     @Test
     @DisplayName("Should pass AppContext to authorization service")
     void shouldPassAppContextToAuthorizationService() {
         // Given
-        UUID partyId = UUID.randomUUID();
+        String subject = "user-" + UUID.randomUUID();
         UUID tenantId = UUID.randomUUID();
         ApplicationExecutionContext context = ApplicationExecutionContext.builder()
                 .context(AppContext.builder()
-                        .partyId(partyId)
+                        .subject(subject)
                         .tenantId(tenantId)
                         .roles(Set.of("ADMIN"))
                         .permissions(Set.of("WRITE"))
                         .build())
                 .build();
-        
+
         when(authorizationService.authorize(any(AppContext.class), any(AppSecurityContext.class)))
                 .thenAnswer(invocation -> {
                     AppContext appContext = invocation.getArgument(0);
-                    
+
                     // Verify that the aspect passed the correct AppContext
-                    assertThat(appContext.getPartyId()).isEqualTo(partyId);
+                    assertThat(appContext.getSubject()).isEqualTo(subject);
                     assertThat(appContext.getTenantId()).isEqualTo(tenantId);
                     assertThat(appContext.getRoles()).contains("ADMIN");
                     assertThat(appContext.getPermissions()).contains("WRITE");
-                    
+
                     AppSecurityContext secContext = invocation.getArgument(1);
                     return Mono.just(secContext.toBuilder()
                             .authorized(true)
                             .build());
                 });
-        
+
         // When
         String result = proxiedService.secureMethod(context);
-        
+
         // Then
         assertThat(result).isEqualTo("success");
     }
-    
+
     private ApplicationExecutionContext createExecutionContext() {
         return ApplicationExecutionContext.builder()
                 .context(AppContext.builder()
-                        .partyId(UUID.randomUUID())
+                        .subject("user-" + UUID.randomUUID())
                         .tenantId(UUID.randomUUID())
                         .roles(Set.of("ADMIN", "USER"))
                         .permissions(Set.of("READ", "WRITE"))
                         .build())
                 .build();
     }
-    
+
     /**
-     * Test service with @Secure annotations.
+     * Test service with {@code @Secure} annotations.
      */
     static class TestService {
-        
+
         @Secure
         public String secureMethod(ApplicationExecutionContext context) {
             return "success";
         }
-        
+
         @Secure(roles = {"ADMIN"})
         public String methodWithRoles(ApplicationExecutionContext context) {
             return "success-with-roles";
         }
-        
+
         @Secure(permissions = {"WRITE"})
         public String methodWithPermissions(ApplicationExecutionContext context) {
             return "success-with-permissions";
         }
-        
+
         @Secure(roles = {"ADMIN"}, permissions = {"WRITE"})
         public String methodWithRolesAndPermissions(ApplicationExecutionContext context) {
             return "success-with-both";
         }
-        
+
         @Secure
         public String methodWithoutContext() {
             return "no-context";
