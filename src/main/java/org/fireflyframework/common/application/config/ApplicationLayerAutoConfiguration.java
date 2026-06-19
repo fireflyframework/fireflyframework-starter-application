@@ -28,11 +28,10 @@ import org.fireflyframework.common.application.security.DefaultSecurityAuthoriza
 import org.fireflyframework.common.application.security.EndpointSecurityRegistry;
 import org.fireflyframework.common.application.security.JwtClaimsRoleExtractor;
 import org.fireflyframework.common.application.security.SecurityAuthorizationService;
-import org.fireflyframework.common.application.spi.SessionContext;
-import org.fireflyframework.common.application.spi.SessionManager;
+import org.fireflyframework.security.spi.SecurityContextPort;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -58,6 +57,11 @@ import org.springframework.context.annotation.EnableAspectJAutoProxy;
  *   <li>Structured Logging (JSON logging via logback-spring.xml)</li>
  *   <li>Banner (Firefly Application Layer banner)</li>
  * </ul>
+ *
+ * <p>The request context is projected from the <strong>validated</strong> security principal
+ * exposed by the {@code fireflyframework-security} platform ({@link SecurityContextPort}). When a
+ * {@link SecurityContextPort} bean is present the library wires a {@link DefaultContextResolver};
+ * otherwise an application may contribute its own {@link ContextResolver}.</p>
  *
  * @author Firefly Development Team
  * @since 1.0.0
@@ -152,17 +156,20 @@ public class ApplicationLayerAutoConfiguration {
 
     /**
      * Creates the default context resolver bean.
-     * Uses {@link ObjectProvider} for the optional {@link SessionManager} dependency.
      *
-     * @param sessionManagerProvider optional session manager provider
+     * <p>Wired only when a {@link SecurityContextPort} bean is available (typically contributed by the
+     * {@code fireflyframework-security} platform). The resolver projects the request context from the
+     * validated security principal — no trusted transport header is read.</p>
+     *
+     * @param securityContextPort the platform-provided accessor for the current validated principal
      * @return DefaultContextResolver instance
      */
     @Bean
+    @ConditionalOnBean(SecurityContextPort.class)
     @ConditionalOnMissingBean(ContextResolver.class)
-    public DefaultContextResolver defaultContextResolver(
-            ObjectProvider<SessionManager<SessionContext>> sessionManagerProvider) {
-        log.info("Creating DefaultContextResolver bean");
-        return new DefaultContextResolver(sessionManagerProvider.getIfAvailable());
+    public DefaultContextResolver defaultContextResolver(SecurityContextPort securityContextPort) {
+        log.info("Creating DefaultContextResolver bean (backed by SecurityContextPort)");
+        return new DefaultContextResolver(securityContextPort);
     }
 
     /**
@@ -179,17 +186,17 @@ public class ApplicationLayerAutoConfiguration {
 
     /**
      * Creates the default security authorization service bean.
-     * Uses {@link ObjectProvider} for the optional {@link SessionManager} dependency.
      *
-     * @param sessionManagerProvider optional session manager provider
+     * <p>Authorization is evaluated solely from the roles and permissions already resolved into the
+     * {@link org.fireflyframework.common.application.context.AppContext}.</p>
+     *
      * @return DefaultSecurityAuthorizationService instance
      */
     @Bean
     @ConditionalOnMissingBean(SecurityAuthorizationService.class)
-    public DefaultSecurityAuthorizationService defaultSecurityAuthorizationService(
-            ObjectProvider<SessionManager<SessionContext>> sessionManagerProvider) {
+    public DefaultSecurityAuthorizationService defaultSecurityAuthorizationService() {
         log.info("Creating DefaultSecurityAuthorizationService bean");
-        return new DefaultSecurityAuthorizationService(sessionManagerProvider.getIfAvailable());
+        return new DefaultSecurityAuthorizationService();
     }
 
     /**

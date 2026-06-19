@@ -25,52 +25,54 @@ import java.util.Set;
 
 /**
  * Service for authorization decisions.
- * Integrates with Firefly SecurityCenter to determine access rights.
- * 
+ *
+ * <p>Authorization is evaluated against the roles and permissions already resolved into the
+ * {@link AppContext} by the context resolution layer. The service is fully product-agnostic.</p>
+ *
  * @author Firefly Development Team
  * @since 1.0.0
  */
 public interface SecurityAuthorizationService {
-    
+
     /**
      * Authorizes an operation based on the application context and security requirements.
-     * 
+     *
      * @param context the application context
      * @param securityContext the security context with requirements
      * @return Mono of updated AppSecurityContext with authorization result
      */
     Mono<AppSecurityContext> authorize(AppContext context, AppSecurityContext securityContext);
-    
+
     /**
-     * Checks if a party has a specific role in a contract/product context.
-     * 
+     * Checks if the current subject has a specific role.
+     *
      * @param context the application context
      * @param role the role to check
      * @return Mono of boolean indicating if role is present
      */
     Mono<Boolean> hasRole(AppContext context, String role);
-    
+
     /**
-     * Checks if a party has a specific permission in a contract/product context.
-     * 
+     * Checks if the current subject has a specific permission.
+     *
      * @param context the application context
      * @param permission the permission to check
      * @return Mono of boolean indicating if permission is granted
      */
     Mono<Boolean> hasPermission(AppContext context, String permission);
-    
+
     /**
      * Evaluates a custom security expression.
-     * 
+     *
      * @param context the application context
      * @param expression the SpEL expression to evaluate
      * @return Mono of boolean result
      */
     Mono<Boolean> evaluateExpression(AppContext context, String expression);
-    
+
     /**
-     * Checks if a party has all specified permissions.
-     * 
+     * Checks if the current subject has all specified permissions.
+     *
      * @param context the application context
      * @param permissions the permissions to check
      * @return Mono of boolean indicating if all permissions are granted
@@ -83,10 +85,10 @@ public interface SecurityAuthorizationService {
                 .flatMap(p -> hasPermission(context, p))
                 .all(Boolean::booleanValue);
     }
-    
+
     /**
-     * Checks if a party has any of the specified roles.
-     * 
+     * Checks if the current subject has any of the specified roles.
+     *
      * @param context the application context
      * @param roles the roles to check
      * @return Mono of boolean indicating if any role is present

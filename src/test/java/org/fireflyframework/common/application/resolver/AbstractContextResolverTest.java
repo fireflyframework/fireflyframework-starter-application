@@ -20,8 +20,6 @@ import org.fireflyframework.common.application.context.AppContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
@@ -30,246 +28,154 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.mock;
 
 /**
  * Unit tests for {@link AbstractContextResolver}.
  */
 @DisplayName("AbstractContextResolver Tests")
 class AbstractContextResolverTest {
-    
+
     private TestContextResolver contextResolver;
     private ServerWebExchange exchange;
-    private ServerHttpRequest request;
-    private HttpHeaders headers;
-    
+
     @BeforeEach
     void setUp() {
         contextResolver = new TestContextResolver();
         exchange = mock(ServerWebExchange.class);
-        request = mock(ServerHttpRequest.class);
-        headers = new HttpHeaders();
-        
-        when(exchange.getRequest()).thenReturn(request);
-        when(request.getHeaders()).thenReturn(headers);
     }
-    
+
     @Test
-    @DisplayName("Should resolve context with all IDs")
-    void shouldResolveContextWithAllIds() {
+    @DisplayName("Should resolve context with subject and tenant")
+    void shouldResolveContextWithSubjectAndTenant() {
         // Given
-        UUID partyId = UUID.randomUUID();
+        String subject = "user-123";
         UUID tenantId = UUID.randomUUID();
-        UUID contractId = UUID.randomUUID();
-        UUID productId = UUID.randomUUID();
-        
-        contextResolver.setPartyId(partyId);
+
+        contextResolver.setSubject(subject);
         contextResolver.setTenantId(tenantId);
-        contextResolver.setContractId(contractId);
-        contextResolver.setProductId(productId);
-        
+
         // When/Then
         StepVerifier.create(contextResolver.resolveContext(exchange))
                 .assertNext(context -> {
-                    assertThat(context.getPartyId()).isEqualTo(partyId);
+                    assertThat(context.getSubject()).isEqualTo(subject);
                     assertThat(context.getTenantId()).isEqualTo(tenantId);
-                    assertThat(context.getContractId()).isEqualTo(contractId);
-                    assertThat(context.getProductId()).isEqualTo(productId);
                 })
                 .verifyComplete();
     }
-    
+
     @Test
-    @DisplayName("Should extract UUID from attribute")
-    void shouldExtractUuidFromAttribute() {
+    @DisplayName("Should resolve context with empty tenant when single-tenant")
+    void shouldResolveContextWithEmptyTenant() {
         // Given
-        UUID expectedId = UUID.randomUUID();
-        when(exchange.getAttribute("testAttribute")).thenReturn(expectedId);
-        
+        String subject = "user-123";
+        contextResolver.setSubject(subject);
+        contextResolver.setTenantId(null);
+
         // When/Then
-        StepVerifier.create(contextResolver.extractUUID(exchange, "testAttribute", "testHeader"))
-                .expectNext(expectedId)
+        StepVerifier.create(contextResolver.resolveContext(exchange))
+                .assertNext(context -> {
+                    assertThat(context.getSubject()).isEqualTo(subject);
+                    assertThat(context.getTenantId()).isNull();
+                })
                 .verifyComplete();
     }
-    
+
     @Test
-    @DisplayName("Should extract UUID from header when attribute is missing")
-    void shouldExtractUuidFromHeader() {
+    @DisplayName("Should default roles to empty when not overridden")
+    void shouldDefaultRolesToEmpty() {
         // Given
-        UUID expectedId = UUID.randomUUID();
-        when(exchange.getAttribute("testAttribute")).thenReturn(null);
-        headers.set("testHeader", expectedId.toString());
-        
+        contextResolver.setSubject("user-123");
+
         // When/Then
-        StepVerifier.create(contextResolver.extractUUID(exchange, "testAttribute", "testHeader"))
-                .expectNext(expectedId)
+        StepVerifier.create(contextResolver.resolveContext(exchange))
+                .assertNext(context -> assertThat(context.getRoles()).isEmpty())
                 .verifyComplete();
     }
-    
+
     @Test
-    @DisplayName("Should return empty when UUID not found")
-    void shouldReturnEmptyWhenUuidNotFound() {
+    @DisplayName("Should default permissions to empty when not overridden")
+    void shouldDefaultPermissionsToEmpty() {
         // Given
-        when(exchange.getAttribute("testAttribute")).thenReturn(null);
-        
+        contextResolver.setSubject("user-123");
+
         // When/Then
-        StepVerifier.create(contextResolver.extractUUID(exchange, "testAttribute", "testHeader"))
+        StepVerifier.create(contextResolver.resolveContext(exchange))
+                .assertNext(context -> assertThat(context.getPermissions()).isEmpty())
                 .verifyComplete();
     }
-    
+
     @Test
-    @DisplayName("Should return empty when header has invalid UUID format")
-    void shouldReturnEmptyForInvalidUuidFormat() {
+    @DisplayName("Should enrich context with resolved roles and permissions")
+    void shouldEnrichContextWithRolesAndPermissions() {
         // Given
-        when(exchange.getAttribute("testAttribute")).thenReturn(null);
-        headers.set("testHeader", "invalid-uuid");
-        
-        // When/Then
-        StepVerifier.create(contextResolver.extractUUID(exchange, "testAttribute", "testHeader"))
-                .verifyComplete();
-    }
-    
-    @Test
-    @DisplayName("Should resolve roles for context")
-    void shouldResolveRoles() {
-        // Given
-        UUID partyId = UUID.randomUUID();
-        UUID tenantId = UUID.randomUUID();
-        
-        AppContext context = AppContext.builder()
-                .partyId(partyId)
-                .tenantId(tenantId)
-                .contractId(UUID.randomUUID())
-                .productId(UUID.randomUUID())
-                .build();
-        
-        // When/Then
-        StepVerifier.create(contextResolver.resolveRoles(context, exchange))
-                .assertNext(roles -> assertThat(roles).isEmpty())
-                .verifyComplete();
-    }
-    
-    @Test
-    @DisplayName("Should resolve permissions for context")
-    void shouldResolvePermissions() {
-        // Given
-        UUID partyId = UUID.randomUUID();
-        UUID tenantId = UUID.randomUUID();
-        
-        AppContext context = AppContext.builder()
-                .partyId(partyId)
-                .tenantId(tenantId)
-                .contractId(UUID.randomUUID())
-                .productId(UUID.randomUUID())
-                .build();
-        
-        // When/Then
-        StepVerifier.create(contextResolver.resolvePermissions(context, exchange))
-                .assertNext(permissions -> assertThat(permissions).isEmpty())
-                .verifyComplete();
-    }
-    
-    @Test
-    @DisplayName("Should enrich context with roles and permissions")
-    void shouldEnrichContext() {
-        // Given
-        UUID partyId = UUID.randomUUID();
-        UUID tenantId = UUID.randomUUID();
-        
-        AppContext basicContext = AppContext.builder()
-                .partyId(partyId)
-                .tenantId(tenantId)
-                .contractId(UUID.randomUUID())
-                .productId(UUID.randomUUID())
-                .build();
-        
         Set<String> roles = Set.of("ROLE_ADMIN", "ROLE_USER");
         Set<String> permissions = Set.of("READ", "WRITE");
-        
+
         TestContextResolver enrichedResolver = new TestContextResolver();
+        enrichedResolver.setSubject("user-123");
         enrichedResolver.setRoles(roles);
         enrichedResolver.setPermissions(permissions);
-        
+
         // When/Then
-        StepVerifier.create(enrichedResolver.enrichContext(basicContext, exchange))
+        StepVerifier.create(enrichedResolver.resolveContext(exchange))
                 .assertNext(context -> {
                     assertThat(context.getRoles()).containsExactlyInAnyOrderElementsOf(roles);
                     assertThat(context.getPermissions()).containsExactlyInAnyOrderElementsOf(permissions);
                 })
                 .verifyComplete();
     }
-    
+
     @Test
-    @DisplayName("Should return empty when extracting UUID from path fails")
-    void shouldReturnEmptyWhenExtractingFromPathFails() {
-        // When/Then
-        StepVerifier.create(contextResolver.extractUUIDFromPath(exchange, "variableName"))
-                .verifyComplete();
+    @DisplayName("Should support by default and have zero priority")
+    void shouldSupportByDefault() {
+        assertThat(contextResolver.supports(exchange)).isTrue();
+        assertThat(contextResolver.getPriority()).isZero();
     }
-    
+
     /**
      * Test implementation of AbstractContextResolver.
      */
     private static class TestContextResolver extends AbstractContextResolver {
-        
-        private UUID partyId = UUID.randomUUID();
+
+        private String subject = "subject-" + UUID.randomUUID();
         private UUID tenantId = UUID.randomUUID();
-        private UUID contractId;
-        private UUID productId;
         private Set<String> roles = Set.of();
         private Set<String> permissions = Set.of();
-        
-        public void setPartyId(UUID partyId) {
-            this.partyId = partyId;
+
+        public void setSubject(String subject) {
+            this.subject = subject;
         }
-        
+
         public void setTenantId(UUID tenantId) {
             this.tenantId = tenantId;
         }
-        
-        public void setContractId(UUID contractId) {
-            this.contractId = contractId;
-        }
-        
-        public void setProductId(UUID productId) {
-            this.productId = productId;
-        }
-        
+
         public void setRoles(Set<String> roles) {
             this.roles = roles;
         }
-        
+
         public void setPermissions(Set<String> permissions) {
             this.permissions = permissions;
         }
-        
+
         @Override
-        public Mono<UUID> resolvePartyId(ServerWebExchange exchange) {
-            return Mono.just(partyId);
+        public Mono<String> resolveSubject(ServerWebExchange exchange) {
+            return Mono.just(subject);
         }
-        
+
         @Override
         public Mono<UUID> resolveTenantId(ServerWebExchange exchange) {
-            return Mono.just(tenantId);
+            return tenantId != null ? Mono.just(tenantId) : Mono.empty();
         }
-        
+
         @Override
-        public Mono<UUID> resolveContractId(ServerWebExchange exchange) {
-            return contractId != null ? Mono.just(contractId) : Mono.empty();
-        }
-        
-        @Override
-        public Mono<UUID> resolveProductId(ServerWebExchange exchange) {
-            return productId != null ? Mono.just(productId) : Mono.empty();
-        }
-        
-        @Override
-        protected Mono<Set<String>> resolveRoles(AppContext context, ServerWebExchange exchange) {
+        protected Mono<Set<String>> resolveRoles(String subject, ServerWebExchange exchange) {
             return Mono.just(roles);
         }
-        
+
         @Override
-        protected Mono<Set<String>> resolvePermissions(AppContext context, ServerWebExchange exchange) {
+        protected Mono<Set<String>> resolvePermissions(String subject, ServerWebExchange exchange) {
             return Mono.just(permissions);
         }
     }

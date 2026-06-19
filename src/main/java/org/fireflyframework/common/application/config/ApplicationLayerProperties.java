@@ -22,19 +22,19 @@ import org.springframework.validation.annotation.Validated;
 
 /**
  * Configuration properties for the Application Layer.
- * 
+ *
  * <p>Configure in application.yml:</p>
  * <pre>
  * firefly:
  *   application:
  *     security:
  *       enabled: true
- *       use-security-center: true
+ *       use-policy-engine: true
  *     context:
  *       cache-enabled: true
  *       cache-ttl: 300
  * </pre>
- * 
+ *
  * @author Firefly Development Team
  * @since 1.0.0
  */
@@ -42,22 +42,22 @@ import org.springframework.validation.annotation.Validated;
 @Validated
 @ConfigurationProperties(prefix = "firefly.application")
 public class ApplicationLayerProperties {
-    
+
     /**
      * Security configuration
      */
     private Security security = new Security();
-    
+
     /**
      * Context resolution configuration
      */
     private Context context = new Context();
-    
+
     /**
      * Configuration management settings
      */
     private Config config = new Config();
-    
+
     @Data
     public static class Security {
         /**
@@ -72,9 +72,11 @@ public class ApplicationLayerProperties {
         private boolean enforce = true;
 
         /**
-         * Whether to use SecurityCenter for authorization
+         * Whether to delegate complex authorization decisions to an external policy engine.
+         * When {@code false}, authorization is evaluated solely from the roles and permissions
+         * already resolved into the request {@code AppContext}.
          */
-        private boolean useSecurityCenter = true;
+        private boolean usePolicyEngine = true;
 
         /**
          * Claim path in JWT token for extracting roles.
@@ -97,37 +99,37 @@ public class ApplicationLayerProperties {
          */
         private boolean failOnMissing = false;
     }
-    
+
     @Data
     public static class Context {
         /**
          * Whether context caching is enabled
          */
         private boolean cacheEnabled = true;
-        
+
         /**
          * Context cache TTL in seconds
          */
         private int cacheTtl = 300;
-        
+
         /**
          * Maximum cache size
          */
         private int cacheMaxSize = 1000;
     }
-    
+
     @Data
     public static class Config {
         /**
          * Whether config caching is enabled
          */
         private boolean cacheEnabled = true;
-        
+
         /**
          * Config cache TTL in seconds
          */
         private int cacheTtl = 600;
-        
+
         /**
          * Whether to refresh config on startup
          */

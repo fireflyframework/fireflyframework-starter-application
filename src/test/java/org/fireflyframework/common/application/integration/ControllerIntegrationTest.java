@@ -29,7 +29,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.server.ServerWebExchange;
@@ -42,204 +41,192 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * Integration test demonstrating both controller types:
- * - AbstractApplicationController (application-layer, no contract/product)
- * - AbstractResourceController (contract + product, both required)
- * 
- * This test validates the complete architecture:
- * 1. Istio injects X-Party-Id header
- * 2. Config-mgmt resolves tenantId from partyId
- * 3. Controllers extract contractId/productId from path variables
- * 4. FireflySessionManager provides roles/permissions (mocked)
- * 5. Context is fully resolved with complete resource hierarchy
+ * Integration test demonstrating both product-agnostic controller types:
+ * <ul>
+ *   <li>{@link AbstractApplicationController} (application-layer endpoints)</li>
+ *   <li>{@link AbstractResourceController} (resource endpoints)</li>
+ * </ul>
+ *
+ * <p>This test validates the resolution flow:</p>
+ * <ol>
+ *   <li>The validated security principal yields the authenticated subject + tenant</li>
+ *   <li>The {@link ContextResolver} produces a product-agnostic {@link AppContext}
+ *       (subject, tenant, roles, permissions)</li>
+ *   <li>The {@link ConfigResolver} loads tenant {@link AppConfig}</li>
+ *   <li>The controller assembles a complete {@link ApplicationExecutionContext}</li>
+ * </ol>
  */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("Controller Integration Test - Two Controller Types")
 class ControllerIntegrationTest {
-    
+
     @Mock
     private ContextResolver contextResolver;
-    
+
     @Mock
     private ConfigResolver configResolver;
-    
+
     @Mock
     private ServerWebExchange exchange;
-    
+
     @Mock
     private ServerHttpRequest request;
-    
-    private UUID testPartyId;
+
+    private String testSubject;
     private UUID testTenantId;
-    private UUID testContractId;
-    private UUID testProductId;
-    
+
     private TestApplicationController applicationController;
     private TestResourceController resourceController;
-    
+
     @BeforeEach
     void setUp() {
-        testPartyId = UUID.randomUUID();
+        testSubject = "user-" + UUID.randomUUID();
         testTenantId = UUID.randomUUID();
-        testContractId = UUID.randomUUID();
-        testProductId = UUID.randomUUID();
-        
+
         // Setup controllers
         applicationController = new TestApplicationController();
         resourceController = new TestResourceController();
-        
+
         // Inject dependencies
         ReflectionTestUtils.setField(applicationController, "contextResolver", contextResolver);
         ReflectionTestUtils.setField(applicationController, "configResolver", configResolver);
         ReflectionTestUtils.setField(resourceController, "contextResolver", contextResolver);
         ReflectionTestUtils.setField(resourceController, "configResolver", configResolver);
     }
-    
+
     @Test
-    @DisplayName("Scenario 1: Application-layer endpoint (Onboarding)")
+    @DisplayName("Scenario 1: Application-layer endpoint")
     void testApplicationLayerEndpoint() {
-        // Given: Onboarding endpoint with only party context
+        // Given: application-layer endpoint with subject + tenant context
         AppContext appContext = AppContext.builder()
-                .partyId(testPartyId)
+                .subject(testSubject)
                 .tenantId(testTenantId)
-                .contractId(null)  // No contract for onboarding
-                .productId(null)   // No product for onboarding
                 .roles(Set.of("customer:onboard"))
                 .permissions(Set.of("profile:create"))
                 .build();
-        
+
         AppConfig appConfig = AppConfig.builder()
                 .tenantId(testTenantId)
                 .tenantName("Test Bank")
                 .build();
-        
-        when(contextResolver.resolveContext(any(ServerWebExchange.class), isNull(), isNull()))
+
+        when(contextResolver.resolveContext(any(ServerWebExchange.class)))
                 .thenReturn(Mono.just(appContext));
         when(configResolver.resolveConfig(testTenantId))
                 .thenReturn(Mono.just(appConfig));
-        
-        // When: Call application-layer controller endpoint
+
+        // When: call application-layer controller endpoint
         Mono<ApplicationExecutionContext> result = applicationController.handleOnboarding(exchange);
-        
-        // Then: Context is resolved with party + tenant only
+
+        // Then: context is resolved with subject + tenant + roles
         StepVerifier.create(result)
                 .assertNext(ctx -> {
-                    assertThat(ctx.getContext().getPartyId()).isEqualTo(testPartyId);
+                    assertThat(ctx.getContext().getSubject()).isEqualTo(testSubject);
                     assertThat(ctx.getContext().getTenantId()).isEqualTo(testTenantId);
-                    assertThat(ctx.getContext().getContractId()).isNull();
-                    assertThat(ctx.getContext().getProductId()).isNull();
                     assertThat(ctx.getContext().getRoles()).contains("customer:onboard");
+                    assertThat(ctx.getContext().getPermissions()).contains("profile:create");
                 })
                 .verifyComplete();
-        
-        verify(contextResolver).resolveContext(eq(exchange), isNull(), isNull());
+
+        verify(contextResolver).resolveContext(eq(exchange));
         verify(configResolver).resolveConfig(testTenantId);
     }
-    
+
     @Test
-    @DisplayName("Scenario 2: Resource endpoint (List Transactions with contract + product)")
+    @DisplayName("Scenario 2: Resource endpoint")
     void testResourceEndpoint() {
-        // Given: Transaction listing endpoint with full context
+        // Given: resource endpoint with subject + tenant + roles/permissions
         AppContext appContext = AppContext.builder()
-                .partyId(testPartyId)
+                .subject(testSubject)
                 .tenantId(testTenantId)
-                .contractId(testContractId)
-                .productId(testProductId)
                 .roles(Set.of("owner", "transaction:viewer"))
                 .permissions(Set.of("transaction:read", "transaction:list"))
                 .build();
-        
+
         AppConfig appConfig = AppConfig.builder()
                 .tenantId(testTenantId)
                 .tenantName("Test Bank")
                 .build();
-        
-        when(contextResolver.resolveContext(any(ServerWebExchange.class), eq(testContractId), eq(testProductId)))
+
+        when(contextResolver.resolveContext(any(ServerWebExchange.class)))
                 .thenReturn(Mono.just(appContext));
         when(configResolver.resolveConfig(testTenantId))
                 .thenReturn(Mono.just(appConfig));
-        
-        // When: Call resource controller endpoint with contractId + productId (both required)
-        Mono<ApplicationExecutionContext> result = resourceController.listTransactions(
-                testContractId, testProductId, exchange);
-        
-        // Then: Context is resolved with complete resource hierarchy
+
+        // When: call resource controller endpoint
+        Mono<ApplicationExecutionContext> result = resourceController.listTransactions(exchange);
+
+        // Then: context is resolved with subject + tenant + authorities
         StepVerifier.create(result)
                 .assertNext(ctx -> {
-                    assertThat(ctx.getContext().getPartyId()).isEqualTo(testPartyId);
+                    assertThat(ctx.getContext().getSubject()).isEqualTo(testSubject);
                     assertThat(ctx.getContext().getTenantId()).isEqualTo(testTenantId);
-                    assertThat(ctx.getContext().getContractId()).isEqualTo(testContractId);
-                    assertThat(ctx.getContext().getProductId()).isEqualTo(testProductId);
                     assertThat(ctx.getContext().getRoles()).contains("owner", "transaction:viewer");
+                    assertThat(ctx.getContext().getPermissions()).contains("transaction:read");
                 })
                 .verifyComplete();
-        
-        verify(contextResolver).resolveContext(eq(exchange), eq(testContractId), eq(testProductId));
+
+        verify(contextResolver).resolveContext(eq(exchange));
         verify(configResolver).resolveConfig(testTenantId);
     }
-    
+
     @Test
-    @DisplayName("Scenario 3: End-to-end flow - Onboarding → Access Resources")
+    @DisplayName("Scenario 3: End-to-end flow across both controller types")
     void testEndToEndFlow() {
-        // Step 1: Onboarding (application-layer, no contract/product)
+        // Step 1: application-layer endpoint
         AppContext onboardingContext = AppContext.builder()
-                .partyId(testPartyId)
+                .subject(testSubject)
                 .tenantId(testTenantId)
                 .roles(Set.of("customer:onboard"))
                 .build();
-        
+
         AppConfig config = AppConfig.builder().tenantId(testTenantId).build();
-        
-        when(contextResolver.resolveContext(any(), isNull(), isNull()))
+
+        when(contextResolver.resolveContext(any(ServerWebExchange.class)))
                 .thenReturn(Mono.just(onboardingContext));
         when(configResolver.resolveConfig(testTenantId))
                 .thenReturn(Mono.just(config));
-        
+
         StepVerifier.create(applicationController.handleOnboarding(exchange))
                 .assertNext(ctx -> {
-                    assertThat(ctx.getContext().getContractId()).isNull();
-                    assertThat(ctx.getContext().getProductId()).isNull();
+                    assertThat(ctx.getContext().getSubject()).isEqualTo(testSubject);
+                    assertThat(ctx.getContext().getRoles()).contains("customer:onboard");
                 })
                 .verifyComplete();
-        
-        // Step 2: After onboarding, access resources with contract + product (both required)
+
+        // Step 2: resource endpoint resolved from the same authenticated principal
         AppContext resourceContext = AppContext.builder()
-                .partyId(testPartyId)
+                .subject(testSubject)
                 .tenantId(testTenantId)
-                .contractId(testContractId)
-                .productId(testProductId)
                 .roles(Set.of("owner", "transaction:viewer"))
                 .build();
-        
-        when(contextResolver.resolveContext(any(), eq(testContractId), eq(testProductId)))
+
+        when(contextResolver.resolveContext(any(ServerWebExchange.class)))
                 .thenReturn(Mono.just(resourceContext));
-        
-        StepVerifier.create(resourceController.listTransactions(testContractId, testProductId, exchange))
+
+        StepVerifier.create(resourceController.listTransactions(exchange))
                 .assertNext(ctx -> {
-                    assertThat(ctx.getContext().getContractId()).isEqualTo(testContractId);
-                    assertThat(ctx.getContext().getProductId()).isEqualTo(testProductId);
+                    assertThat(ctx.getContext().getSubject()).isEqualTo(testSubject);
                     assertThat(ctx.getContext().getRoles()).contains("owner", "transaction:viewer");
                 })
                 .verifyComplete();
     }
-    
+
     // Test controller implementations
-    
+
     static class TestApplicationController extends AbstractApplicationController {
         public Mono<ApplicationExecutionContext> handleOnboarding(ServerWebExchange exchange) {
             return resolveExecutionContext(exchange);
         }
     }
-    
+
     static class TestResourceController extends AbstractResourceController {
-        public Mono<ApplicationExecutionContext> listTransactions(
-                UUID contractId, UUID productId, ServerWebExchange exchange) {
-            return resolveExecutionContext(exchange, contractId, productId);
+        public Mono<ApplicationExecutionContext> listTransactions(ServerWebExchange exchange) {
+            return resolveExecutionContext(exchange);
         }
     }
 }

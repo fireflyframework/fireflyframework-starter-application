@@ -43,6 +43,20 @@
             <artifactId>spring-boot-starter-security</artifactId>
         </dependency>
 
+        <!-- Firefly security platform: secure-by-default reactive resource server + method security.
+             The resource server auto-configures only for reactive web apps and can be disabled via
+             firefly.security.resource-server.enabled=false. -->
+        <dependency>
+            <groupId>org.fireflyframework</groupId>
+            <artifactId>fireflyframework-security-resource-server</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.fireflyframework</groupId>
+            <artifactId>fireflyframework-security-method-policy</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
         <!-- Spring Configuration Processor -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
